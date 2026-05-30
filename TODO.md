@@ -1,0 +1,2 @@
+FIX:
+Pembayaran > detail siswa
