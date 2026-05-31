@@ -51,7 +51,7 @@ class PusmendikController extends Controller
             ->groupBy('exam_siswa_id');
 
         $query = $this->studentQuery(['recommendation_handlers.nominal_rekom', 'recommendation_handlers.handled_by_name'])
-            ->leftJoinSub($latestHandlers, 'latest_handlers', fn ($join) => $join->on('latest_handlers.exam_siswa_id', '=', 'siswa.id'))
+            ->leftJoinSub($latestHandlers, 'latest_handlers', fn($join) => $join->on('latest_handlers.exam_siswa_id', '=', 'siswa.id'))
             ->leftJoin($handlerJoinTable, 'recommendation_handlers.id', '=', 'latest_handlers.latest_id')
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q');
@@ -73,6 +73,7 @@ class PusmendikController extends Controller
                 ->distinct()
                 ->orderBy('handled_by_name')
                 ->pluck('handled_by_name'),
+            'paymentSummary' => $this->paymentSummaryByLevel(),
             'filters' => $request->all(),
         ]);
     }
@@ -143,6 +144,17 @@ class PusmendikController extends Controller
         $summary = $this->payment($student->idyayasan, true);
         $payments = $storedTunggakan ?: $this->payment($student->idyayasan, false);
         $paymentView = $this->paymentViewModel($summary, $payments);
+
+        if ($storedTunggakan && $paymentView['unpaid_periods'] === []) {
+            $freshPayments = $this->payment($student->idyayasan, false);
+            $freshPaymentView = $this->paymentViewModel($summary, $freshPayments);
+
+            if ($freshPaymentView['unpaid_periods'] !== []) {
+                $payments = $freshPayments;
+                $paymentView = $freshPaymentView;
+            }
+        }
+
         $settings = DB::table('app_settings')->pluck('value', 'key');
         $paymentDeadlineDays = (int) ($settings['surat_batas_pembayaran_hari'] ?? 7);
         $createdAt = $handler?->created_at ? Carbon::parse($handler->created_at, 'Asia/Jakarta') : now('Asia/Jakarta');
@@ -155,9 +167,12 @@ class PusmendikController extends Controller
             'text_1' => $settings['surat_teks_1'] ?? 'Dengan ini, saya mengajukan pembayaran terkait administrasi agar anak saya dapat mengikuti Ujian Asesmen Sumatif Akhir Semester (ASAS) Semester Genap.',
             'text_2' => $settings['surat_teks_2'] ?? 'Adapun pembayaran yang telah saya lakukan sebesar Rp {nominal_rekom}, dari Rp {total_tagihan} akan saya lunasi paling lambat pada {tanggal_batas} sesuai dengan ketentuan pembayaran Net {batas_hari} dari tanggal pembuatan surat ini.',
             'text_3' => $settings['surat_teks_3'] ?? 'Demikian pernyataan ini saya buat dengan sebenar-benarnya dan dapat dipergunakan sebagaimana mestinya.',
+            'text_1_html' => $this->formatLetterText($settings['surat_teks_1'] ?? 'Dengan ini, saya mengajukan pembayaran terkait administrasi agar anak saya dapat mengikuti Ujian Asesmen Sumatif Akhir Semester (ASAS) Semester Genap.'),
+            'text_3_html' => $this->formatLetterText($settings['surat_teks_3'] ?? 'Demikian pernyataan ini saya buat dengan sebenar-benarnya dan dapat dipergunakan sebagaimana mestinya.'),
             'deadline_days' => $paymentDeadlineDays,
             'deadline_date' => $createdAt->copy()->addDays($paymentDeadlineDays),
         ];
+        $letter['text_2_html'] = $this->formatLetterText($letter['text_2']);
 
         return view('students.print', compact('student', 'handler', 'paymentView', 'letter'));
     }
@@ -184,15 +199,20 @@ class PusmendikController extends Controller
     {
         $student = null;
         $summary = null;
+        $paymentView = null;
 
         if ($request->filled('q')) {
             $student = $this->studentQuery()
                 ->where(fn($query) => $query->where('siswa.idyayasan', $request->q)->orWhere('siswa.nama', 'like', '%' . $request->q . '%'))
                 ->first();
-            $summary = $student ? $this->payment($student->idyayasan, true) : null;
+            if ($student) {
+                $summary = $this->payment($student->idyayasan, true);
+                $payments = $this->payment($student->idyayasan, false);
+                $paymentView = $this->paymentViewModel($summary, $payments);
+            }
         }
 
-        return view('payments.status', compact('student', 'summary'));
+        return view('payments.status', compact('student', 'summary', 'paymentView'));
     }
 
     public function studentSearch(Request $request)
@@ -205,14 +225,14 @@ class PusmendikController extends Controller
 
         return response()->json(
             $this->studentQuery()
-                ->where(fn ($query) => $query
+                ->where(fn($query) => $query
                     ->where('siswa.nama', 'like', "%{$q}%")
                     ->orWhere('siswa.idyayasan', 'like', "%{$q}%")
                     ->orWhere('siswa.nis', 'like', "%{$q}%"))
                 ->orderBy('siswa.nama')
                 ->limit(8)
                 ->get()
-                ->map(fn ($student) => [
+                ->map(fn($student) => [
                     'id' => $student->id,
                     'idyayasan' => $student->idyayasan,
                     'nama' => $student->nama,
@@ -229,17 +249,18 @@ class PusmendikController extends Controller
             ->leftJoin('mapel', 'mapel.id', '=', 'jadwal_ujian.mapel_id')
             ->select('jadwal_ujian.*', 'mapel.nama_mapel')
             ->when($request->filled('tanggal'), fn($q) => $q->whereDate('tanggal', $request->tanggal))
-            ->when($request->filled('q'), fn($q) => $q->where('judul', 'like', '%' . $request->q . '%'))
-            ->orderByDesc('tanggal')
-            ->paginate(30)
-            ->withQueryString();
+            ->orderBy('tanggal')
+            ->orderBy('judul')
+            ->get();
 
-        return view('simple-table', [
+        return view('schedules.index', [
             'title' => 'Jadwal Ujian',
             'items' => $items,
-            'columns' => ['tanggal' => 'Tanggal', 'judul' => 'Nama Ujian', 'nama_mapel' => 'Mapel', 'durasi_menit' => 'Durasi', 'status' => 'Status'],
-            'filters' => ['q' => 'Cari ujian', 'tanggal' => 'Tanggal'],
-            'filterOptions' => [],
+            'tanggalOptions' => $this->exam()->table('jadwal_ujian')
+                ->select('tanggal')
+                ->distinct()
+                ->orderBy('tanggal')
+                ->pluck('tanggal'),
         ]);
     }
 
@@ -264,10 +285,9 @@ class PusmendikController extends Controller
             ->paginate(30)
             ->withQueryString();
 
-        return view('simple-table', [
+        return view('rooms.index', [
             'title' => 'Ruangan dan Sesi Siswa',
             'items' => $items,
-            'columns' => ['idyayasan' => 'ID Yayasan', 'nama' => 'Nama', 'tingkat' => 'Tingkat', 'nama_kelas' => 'Kelas', 'nama_sesi' => 'Sesi', 'nama_ruangan' => 'Ruangan', 'status_kehadiran' => 'Kehadiran'],
             'filters' => ['q' => 'Nama / ID Yayasan', 'tingkat' => 'Tingkat', 'kelas' => 'Kelas', 'ruangan' => 'Ruangan', 'sesi' => 'Sesi'],
             'filterOptions' => $this->roomFilterOptions(),
         ]);
@@ -275,24 +295,39 @@ class PusmendikController extends Controller
 
     public function supervisors(Request $request)
     {
+        $supervisorAssignments = $this->exam()->table('jadwal_ujian_sesi_ruangan as jsr2')
+            ->join('jadwal_ujian as ju2', 'ju2.id', '=', 'jsr2.jadwal_ujian_id')
+            ->select('ju2.tanggal', 'jsr2.sesi_ruangan_id', DB::raw('MAX(jsr2.pengawas_id) as pengawas_id'))
+            ->whereNotNull('jsr2.pengawas_id')
+            ->groupBy('ju2.tanggal', 'jsr2.sesi_ruangan_id');
+
         $items = $this->exam()->table('jadwal_ujian_sesi_ruangan as jsr')
             ->join('jadwal_ujian as ju', 'ju.id', '=', 'jsr.jadwal_ujian_id')
             ->join('sesi_ruangan as sr', 'sr.id', '=', 'jsr.sesi_ruangan_id')
             ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
-            ->leftJoin('users as pengawas', 'pengawas.id', '=', 'jsr.pengawas_id')
-            ->select('ju.tanggal', 'ju.judul', 'sr.nama_sesi', 'ruangan.nama_ruangan', 'pengawas.name as pengawas')
+            ->leftJoinSub($supervisorAssignments, 'supervisor_assignments', function ($join) {
+                $join->on('supervisor_assignments.tanggal', '=', 'ju.tanggal')
+                    ->on('supervisor_assignments.sesi_ruangan_id', '=', 'jsr.sesi_ruangan_id');
+            })
+            ->leftJoin('guru as pengawas', 'pengawas.id', '=', DB::raw('COALESCE(jsr.pengawas_id, supervisor_assignments.pengawas_id)'))
+            ->select('ju.tanggal', 'ju.judul', 'sr.nama_sesi', 'ruangan.nama_ruangan', 'pengawas.nama as pengawas')
             ->when($request->filled('tanggal'), fn($q) => $q->whereDate('ju.tanggal', $request->tanggal))
-            ->orderByDesc('ju.tanggal')
             ->orderBy('ruangan.nama_ruangan')
-            ->paginate(30)
-            ->withQueryString();
+            ->orderBy('ju.tanggal')
+            ->orderBy('sr.nama_sesi')
+            ->get();
 
 
-        return view('simple-table', [
+        return view('supervisors.index', [
             'title' => 'Pengawas',
             'items' => $items,
-            'columns' => ['tanggal' => 'Tanggal', 'judul' => 'Ujian', 'nama_sesi' => 'Sesi', 'nama_ruangan' => 'Ruangan', 'pengawas' => 'Pengawas'],
             'filters' => ['tanggal' => 'Tanggal Ujian'],
+            'tanggalOptions' => $this->exam()->table('jadwal_ujian')
+                ->select('tanggal')
+                ->distinct()
+                ->orderBy('tanggal')
+                ->limit(20)
+                ->pluck('tanggal'),
             'filterOptions' => [],
         ]);
     }
@@ -331,6 +366,47 @@ class PusmendikController extends Controller
             ->get();
 
         return view('live.index', compact('sessions', 'details'));
+    }
+
+    public function examResults(Request $request)
+    {
+        $query = $this->examResultsQuery($request);
+        $analysisRows = (clone $query)->get();
+        $total = $analysisRows->count();
+        $finished = $analysisRows->whereIn('status', ['selesai', 'finished', 'final'])->count();
+        $average = $total ? round($analysisRows->avg('nilai'), 2) : 0;
+        $highest = $total ? round($analysisRows->max('nilai'), 2) : 0;
+        $lowest = $total ? round($analysisRows->min('nilai'), 2) : 0;
+        $passed = $analysisRows->where('lulus', 1)->count();
+
+        return view('results.index', [
+            'items' => $query->orderByDesc('ju.tanggal')->orderBy('siswa.nama')->paginate(30)->withQueryString(),
+            'analysis' => [
+                'total' => $total,
+                'finished' => $finished,
+                'average' => $average,
+                'highest' => $highest,
+                'lowest' => $lowest,
+                'passed' => $passed,
+                'pass_rate' => $total ? round(($passed / $total) * 100, 1) : 0,
+            ],
+            'filterOptions' => $this->examResultFilterOptions(),
+        ]);
+    }
+
+    public function downloadExamResults(Request $request)
+    {
+        $items = $this->examResultsQuery($request)
+            ->orderByDesc('ju.tanggal')
+            ->orderBy('siswa.nama')
+            ->get();
+
+        $filename = 'hasil-ujian-' . now('Asia/Jakarta')->format('Ymd-His') . '.xls';
+
+        return response()
+            ->view('results.export', compact('items'))
+            ->header('Content-Type', 'application/vnd.ms-excel; charset=UTF-8')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
     }
 
     public function users()
@@ -451,6 +527,56 @@ class PusmendikController extends Controller
         ];
     }
 
+    private function examResultsQuery(Request $request)
+    {
+        return $this->exam()->table('hasil_ujian as h')
+            ->join('siswa', 'siswa.id', '=', 'h.siswa_id')
+            ->leftJoin('kelas', 'kelas.id', '=', 'siswa.kelas_id')
+            ->join('jadwal_ujian as ju', 'ju.id', '=', 'h.jadwal_ujian_id')
+            ->leftJoin('mapel', 'mapel.id', '=', 'ju.mapel_id')
+            ->select(
+                'h.id',
+                'siswa.idyayasan',
+                'siswa.nama',
+                'kelas.tingkat',
+                'kelas.nama_kelas',
+                'ju.id as ujian_id',
+                'ju.judul',
+                'ju.tanggal',
+                'mapel.nama_mapel',
+                'h.jumlah_soal',
+                'h.jumlah_dijawab',
+                'h.jumlah_benar',
+                'h.jumlah_salah',
+                'h.jumlah_tidak_dijawab',
+                'h.skor',
+                'h.nilai',
+                'h.lulus',
+                'h.status',
+                'h.violations_count',
+                'h.waktu_mulai',
+                'h.waktu_selesai'
+            )
+            ->whereNull('siswa.deleted_at')
+            ->when($request->filled('q'), fn($query) => $query->where(fn($inner) => $inner
+                ->where('siswa.nama', 'like', '%' . $request->q . '%')
+                ->orWhere('siswa.idyayasan', 'like', '%' . $request->q . '%')))
+            ->when($request->filled('tingkat'), fn($query) => $query->where('kelas.tingkat', $request->tingkat))
+            ->when($request->filled('kelas'), fn($query) => $query->where('kelas.nama_kelas', $request->kelas))
+            ->when($request->filled('ujian'), fn($query) => $query->where('ju.id', $request->ujian));
+    }
+
+    private function examResultFilterOptions(): array
+    {
+        $exam = $this->exam();
+
+        return [
+            'tingkat' => $exam->table('kelas')->whereNotNull('tingkat')->distinct()->orderBy('tingkat')->pluck('tingkat'),
+            'kelas' => $exam->table('kelas')->distinct()->orderBy('nama_kelas')->pluck('nama_kelas'),
+            'ujian' => $exam->table('jadwal_ujian')->orderByDesc('tanggal')->orderBy('judul')->pluck('judul', 'id'),
+        ];
+    }
+
     private function payment(string $idyayasan, bool $summary): array
     {
         $base = rtrim($this->setting('payment_api_base_url', env('PAYMENT_API_BASE_URL', 'https://api.daruttaqwa.or.id/sisda/v1')), '/');
@@ -466,22 +592,30 @@ class PusmendikController extends Controller
     private function paymentViewModel(array $summary, array $payments): array
     {
         $periods = $this->extractPeriodGroups($payments);
-        $billRows = collect($periods)->flatMap(fn ($period) => $period['items'])->values()->all();
+        $billRows = collect($periods)->flatMap(fn($period) => $period['items'])->values()->all();
 
-        $totalRemaining = $this->firstNumericByKeys($summary, ['total_remaining', 'remaining', 'total_tunggakan', 'tunggakan'])
-            ?? collect($periods)->sum('total_remaining');
+        $periodTotalRemaining = collect($periods)->sum('total_remaining');
+        $periodTotalBill = collect($periods)->sum('total_billed');
+        $periodTotalPaid = collect($periods)->sum('total_paid');
 
-        $totalBill = $this->firstNumericByKeys($summary, ['total_billed', 'total_bill', 'total_tagihan', 'amount', 'total'])
-            ?? collect($periods)->sum('total_billed');
+        $totalRemaining = $periods !== []
+            ? $periodTotalRemaining
+            : ($this->sumDebtByKeyDeep($summary, 'total_remaining') ?: abs($this->firstNumericByKeysDeep($summary, ['remaining', 'total_tunggakan', 'tunggakan']) ?? 0));
 
-        $totalPaid = $this->firstNumericByKeys($summary, ['total_paid', 'paid', 'total_bayar'])
-            ?? collect($periods)->sum('total_paid');
+        $totalBill = $periodTotalBill > 0
+            ? $periodTotalBill
+            : ($this->firstNumericByKeysDeep($summary, ['total_paid', 'paid', 'total_tagihan', 'amount', 'total']) ?? 0);
+
+        $totalPaid = $periodTotalPaid > 0
+            ? $periodTotalPaid
+            : ($this->firstNumericByKeysDeep($summary, ['total_billed', 'billed', 'total_bayar']) ?? max(0, $totalBill - $totalRemaining));
 
         return [
             'total_remaining' => (float) $totalRemaining,
             'total_bill' => (float) $totalBill,
             'total_paid' => (float) $totalPaid,
             'periods' => $periods,
+            'unpaid_periods' => $this->unpaidPeriods($periods),
             'bills' => $billRows,
             'raw_summary' => $summary,
             'raw_payments' => $payments,
@@ -491,11 +625,11 @@ class PusmendikController extends Controller
     private function extractPeriodGroups(array $payload): array
     {
         $students = $payload['data'] ?? $payload;
-        if (! is_array($students)) {
+        if (!is_array($students)) {
             return [];
         }
 
-        if (! array_is_list($students)) {
+        if (!array_is_list($students)) {
             $students = [$students];
         }
 
@@ -511,14 +645,14 @@ class PusmendikController extends Controller
                     $categoryItems = [];
 
                     foreach (($category['items'] ?? []) as $item) {
-                        $remaining = (float) ($item['remaining_balance'] ?? $item['total_remaining'] ?? 0);
+                        $remaining = abs((float) ($item['remaining_balance'] ?? $item['total_remaining'] ?? 0));
                         $row = [
                             'name' => $categoryName,
                             'period' => (string) ($period['period_id'] ?? '-'),
                             'kelas_info' => $period['kelas_info'] ?? '-',
                             'unit' => $item['unit_name'] ?? $item['unit_id'] ?? '-',
-                            'amount' => (float) ($item['amount_billed'] ?? 0),
-                            'paid' => (float) ($item['amount_paid'] ?? 0),
+                            'amount' => (float) ($item['amount_paid'] ?? 0),
+                            'paid' => (float) ($item['amount_billed'] ?? 0),
                             'remaining' => $remaining,
                             'journal_date' => $item['journal_date'] ?? '-',
                             'last_updated' => $item['last_updated'] ?? '-',
@@ -533,15 +667,15 @@ class PusmendikController extends Controller
                         }
                     }
 
-                    $categoryRemaining = (float) ($category['summary']['total_remaining'] ?? 0);
-                    if ($categoryRemaining > 0 && $categoryItems === []) {
+                    $categoryRemaining = $this->summaryDebt($category['summary'] ?? [], 'total_remaining', collect($categoryItems)->sum('remaining'));
+                    if ($categoryRemaining > 0 && collect($categoryItems)->sum('remaining') <= 0) {
                         $periodRows[] = [
                             'name' => $categoryName,
                             'period' => (string) ($period['period_id'] ?? '-'),
                             'kelas_info' => $period['kelas_info'] ?? '-',
                             'unit' => '-',
-                            'amount' => (float) ($category['summary']['total_billed'] ?? 0),
-                            'paid' => (float) ($category['summary']['total_paid'] ?? 0),
+                            'amount' => (float) ($category['summary']['total_paid'] ?? 0),
+                            'paid' => (float) ($category['summary']['total_billed'] ?? 0),
                             'remaining' => $categoryRemaining,
                             'journal_date' => '-',
                             'last_updated' => '-',
@@ -553,18 +687,15 @@ class PusmendikController extends Controller
                     $categoryGroups[] = [
                         'category_name' => $categoryName,
                         'summary' => $category['summary'] ?? [],
+                        'total_remaining' => $categoryRemaining,
                         'items' => $categoryItems,
                         'raw' => $category,
                     ];
                 }
 
-                $periodRemaining = (float) ($period['summary']['total_remaining'] ?? collect($periodRows)->sum('remaining'));
-                $periodBilled = (float) ($period['summary']['total_billed'] ?? collect($periodRows)->sum('amount'));
-                $periodPaid = (float) ($period['summary']['total_paid'] ?? collect($periodRows)->sum('paid'));
-
-                if ($periodRemaining <= 0 && count($periodRows) === 0) {
-                    continue;
-                }
+                $periodRemaining = $this->summaryDebt($period['summary'] ?? [], 'total_remaining', collect($categoryGroups)->sum('total_remaining'));
+                $periodBilled = (float) ($period['summary']['total_paid'] ?? collect($periodRows)->sum('amount'));
+                $periodPaid = (float) ($period['summary']['total_billed'] ?? collect($periodRows)->sum('paid'));
 
                 $periods[] = [
                     'period_id' => (string) ($period['period_id'] ?? '-'),
@@ -591,14 +722,81 @@ class PusmendikController extends Controller
 
         return collect($fallbackRows)
             ->groupBy('period')
-            ->map(fn ($rows, $period) => [
+            ->map(fn($rows, $period) => [
                 'period_id' => (string) $period,
                 'kelas_info' => '-',
+                'summary' => [
+                    'total_billed' => $rows->sum('amount'),
+                    'total_paid' => $rows->sum('paid'),
+                    'total_remaining' => $rows->sum('remaining'),
+                ],
                 'total_billed' => $rows->sum('amount'),
                 'total_paid' => $rows->sum('paid'),
                 'total_remaining' => $rows->sum('remaining'),
+                'categories' => [],
                 'items' => $rows->values()->all(),
+                'raw' => [],
             ])
+            ->values()
+            ->all();
+    }
+
+    private function unpaidPeriods(array $periods): array
+    {
+        return collect($periods)
+            ->filter(fn($period) => (float) ($period['total_remaining'] ?? 0) > 0)
+            ->map(function ($period) {
+                $period['categories'] = collect($period['categories'] ?? [])
+                    ->filter(fn($category) => abs((float) ($category['summary']['total_remaining'] ?? collect($category['items'] ?? [])->sum('remaining'))) > 0)
+                    ->map(function ($category) {
+                        $category['items'] = collect($category['items'] ?? [])
+                            ->filter(fn($item) => (float) ($item['remaining'] ?? 0) > 0)
+                            ->values()
+                            ->all();
+
+                        return $category;
+                    })
+                    ->values()
+                    ->all();
+
+                $period['items'] = collect($period['items'] ?? [])
+                    ->filter(fn($item) => (float) ($item['remaining'] ?? 0) > 0)
+                    ->values()
+                    ->all();
+
+                return $period;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function paymentSummaryByLevel(): array
+    {
+        return $this->studentQuery()
+            ->select('siswa.id', 'siswa.idyayasan', 'siswa.nama', 'siswa.status_pembayaran', 'kelas.tingkat', 'kelas.nama_kelas')
+            ->orderBy('kelas.tingkat')
+            ->orderBy('kelas.nama_kelas')
+            ->orderBy('siswa.nama')
+            ->get()
+            ->groupBy(fn($student) => $student->tingkat ?: 'Tanpa Tingkat')
+            ->map(function ($levelStudents, $level) {
+                return [
+                    'tingkat' => $level,
+                    'total' => $levelStudents->count(),
+                    'lunas' => $levelStudents->where('status_pembayaran', 'Lunas')->count(),
+                    'belum' => $levelStudents->where('status_pembayaran', '!=', 'Lunas')->count(),
+                    'classes' => $levelStudents
+                        ->groupBy(fn($student) => $student->nama_kelas ?: 'Tanpa Kelas')
+                        ->map(fn($classStudents, $className) => [
+                            'kelas' => $className,
+                            'total' => $classStudents->count(),
+                            'lunas' => $classStudents->where('status_pembayaran', 'Lunas')->count(),
+                            'belum' => $classStudents->where('status_pembayaran', '!=', 'Lunas')->count(),
+                            'students' => $classStudents->values(),
+                        ])
+                        ->values(),
+                ];
+            })
             ->values()
             ->all();
     }
@@ -608,8 +806,8 @@ class PusmendikController extends Controller
         $rows = [];
         $this->walkPayload($payload, function (array $item) use (&$rows) {
             $remaining = $this->firstNumericByKeys($item, ['total_remaining', 'remaining_balance', 'remaining', 'sisa', 'sisa_tagihan', 'nominal_sisa']);
-            $amount = $this->firstNumericByKeys($item, ['total_billed', 'amount_billed', 'total_bill', 'total_tagihan', 'bill', 'amount', 'nominal', 'tagihan']);
-            $paid = $this->firstNumericByKeys($item, ['total_paid', 'amount_paid', 'paid', 'total_bayar']);
+            $amount = $this->firstNumericByKeys($item, ['total_paid', 'amount_paid', 'paid', 'total_bill', 'total_tagihan', 'bill', 'amount', 'nominal', 'tagihan']);
+            $paid = $this->firstNumericByKeys($item, ['total_billed', 'amount_billed', 'billed', 'total_bayar']);
 
             if ($remaining === null && $amount === null) {
                 return;
@@ -628,15 +826,15 @@ class PusmendikController extends Controller
         });
 
         return collect($rows)
-            ->filter(fn ($row) => $row['remaining'] > 0 || $row['amount'] > 0)
-            ->unique(fn ($row) => $row['name'].'|'.$row['period'].'|'.$row['amount'].'|'.$row['remaining'])
+            ->filter(fn($row) => $row['remaining'] > 0 || $row['amount'] > 0)
+            ->unique(fn($row) => $row['name'] . '|' . $row['period'] . '|' . $row['amount'] . '|' . $row['remaining'])
             ->values()
             ->all();
     }
 
     private function walkPayload(mixed $payload, callable $callback): void
     {
-        if (! is_array($payload)) {
+        if (!is_array($payload)) {
             return;
         }
 
@@ -666,10 +864,43 @@ class PusmendikController extends Controller
         return null;
     }
 
+    private function firstNumericByKeysDeep(array $payload, array $keys): ?float
+    {
+        $found = null;
+        $this->walkPayload($payload, function (array $item) use ($keys, &$found) {
+            if ($found !== null) {
+                return;
+            }
+
+            $found = $this->firstNumericByKeys($item, $keys);
+        });
+
+        return $found;
+    }
+
+    private function sumDebtByKeyDeep(array $payload, string $key): float
+    {
+        $sum = 0.0;
+        $this->walkPayload($payload, function (array $item) use ($key, &$sum) {
+            if (isset($item[$key]) && is_numeric($item[$key])) {
+                $sum += abs((float) $item[$key]);
+            }
+        });
+
+        return $sum;
+    }
+
+    private function summaryDebt(array $summary, string $key, float|int $fallback = 0): float
+    {
+        return array_key_exists($key, $summary) && is_numeric($summary[$key])
+            ? abs((float) $summary[$key])
+            : (float) $fallback;
+    }
+
     private function firstStringByKeys(array $payload, array $keys): ?string
     {
         foreach ($keys as $key) {
-            if (! empty($payload[$key]) && is_scalar($payload[$key])) {
+            if (!empty($payload[$key]) && is_scalar($payload[$key])) {
                 return (string) $payload[$key];
             }
         }
@@ -680,5 +911,15 @@ class PusmendikController extends Controller
     private function romanMonth(int $month): string
     {
         return [1 => 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'][$month] ?? 'I';
+    }
+
+    private function formatLetterText(string $text): string
+    {
+        $escaped = e($text);
+        $escaped = preg_replace('/\*\*(.*?)\*\*/s', '<strong>$1</strong>', $escaped);
+        $escaped = preg_replace('/\*(.*?)\*/s', '<em>$1</em>', $escaped);
+        $escaped = preg_replace('/==(.*?)==/s', '<mark>$1</mark>', $escaped);
+
+        return nl2br($escaped);
     }
 }

@@ -1,4 +1,4 @@
-@extends('layouts.app', ['title' => 'Detail Pembayaran'])
+@extends('layouts.app', ['title' => 'Detail Rekom'])
 
 @php
     $formatValue = function ($value) {
@@ -15,7 +15,7 @@
 @section('content')
 <div class="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
     <div>
-        <a href="{{ route('students.index') }}" class="text-sm font-black text-teal-700 hover:text-teal-600">Kembali ke Pembayaran</a>
+        <a href="{{ route('students.index') }}" class="text-sm font-black text-teal-700 hover:text-teal-600">Kembali ke Rekom</a>
         <h1 class="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{{ $student->nama }}</h1>
         <p class="mt-2 text-sm text-slate-500">{{ $student->idyayasan }} / {{ $student->nama_kelas }} / {{ $student->status_pembayaran }}</p>
     </div>
@@ -63,7 +63,7 @@
                         <div class="mb-4 rounded-2xl bg-slate-50 p-4">
                             <div class="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Summary</div>
                             <div class="grid gap-2 sm:grid-cols-2">
-                                @forelse($period['summary'] as $key => $value)
+                                @forelse(($period['summary'] ?? []) as $key => $value)
                                     <div class="rounded-xl bg-white px-3 py-2 text-sm">
                                         <div class="text-xs font-bold uppercase tracking-wide text-slate-400">{{ $key }}</div>
                                         <div class="mt-1 font-black text-slate-800">{{ $formatValue($value) }}</div>
@@ -75,15 +75,20 @@
                         </div>
 
                         <div class="grid gap-3">
-                            @forelse($period['categories'] as $category)
+                            @forelse(($period['categories'] ?? []) as $category)
                                 <details class="group/category overflow-hidden rounded-2xl border border-slate-200">
                                     <summary class="flex cursor-pointer list-none flex-col justify-between gap-2 bg-white px-4 py-3 sm:flex-row sm:items-center">
                                         <div class="font-black text-slate-950">{{ $category['category_name'] }}</div>
                                         <div class="text-xs font-bold text-slate-500">{{ count($category['items']) }} item</div>
                                     </summary>
                                     <div class="border-t border-slate-200 bg-slate-50 p-4">
+                                        <div class="mb-3 flex flex-wrap gap-2 text-xs font-black">
+                                            <span class="rounded-full bg-white px-3 py-1 text-slate-700">Tagihan Rp {{ number_format((float) ($category['summary']['total_paid'] ?? 0), 0, ',', '.') }}</span>
+                                            <span class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">Dibayar Rp {{ number_format((float) ($category['summary']['total_billed'] ?? 0), 0, ',', '.') }}</span>
+                                            <span class="rounded-full bg-rose-50 px-3 py-1 text-rose-700">Sisa Rp {{ number_format(abs((float) ($category['summary']['total_remaining'] ?? 0)), 0, ',', '.') }}</span>
+                                        </div>
                                         <div class="mb-4 grid gap-2 sm:grid-cols-3">
-                                            @forelse($category['summary'] as $key => $value)
+                                            @forelse(($category['summary'] ?? []) as $key => $value)
                                                 <div class="rounded-xl bg-white px-3 py-2 text-sm">
                                                     <div class="text-xs font-bold uppercase tracking-wide text-slate-400">{{ $key }}</div>
                                                     <div class="mt-1 font-black text-slate-800">{{ $formatValue($value) }}</div>
@@ -94,7 +99,7 @@
                                         </div>
 
                                         <div class="grid gap-2">
-                                            @forelse($category['items'] as $item)
+                                            @forelse(($category['items'] ?? []) as $item)
                                                 <details class="rounded-2xl border border-slate-200 bg-white">
                                                     <summary class="flex cursor-pointer list-none flex-col justify-between gap-2 px-4 py-3 sm:flex-row sm:items-center">
                                                         <div>
@@ -109,7 +114,7 @@
                                                     </summary>
                                                     <div class="border-t border-slate-200 p-4">
                                                         <div class="grid gap-2 sm:grid-cols-2">
-                                                            @foreach($item['raw'] as $key => $value)
+                                                            @foreach(($item['raw'] ?? []) as $key => $value)
                                                                 <div class="rounded-xl bg-slate-50 px-3 py-2 text-sm">
                                                                     <div class="text-xs font-bold uppercase tracking-wide text-slate-400">{{ $key }}</div>
                                                                     <div class="mt-1 font-semibold text-slate-800">{{ is_scalar($value) || $value === null ? $formatValue($value) : json_encode($value, JSON_UNESCAPED_UNICODE) }}</div>

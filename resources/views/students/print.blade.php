@@ -23,21 +23,27 @@
         .signatures { display:grid; grid-template-columns:1fr 1fr; gap:70px; margin-top:8px; }
         .signature { text-align:center; min-height:115px; display:flex; flex-direction:column; justify-content:space-between; }
         .name-line { border-top:1px solid #111827; padding-top:4px; min-height:22px; }
+        .summary-table th, .summary-table td { font-size:14px; }
+        .page-break { page-break-before: always; break-before: page; }
+        mark { background:#fef08a; padding:0 2px; }
         @media print { .print-btn { display:none; } body { margin:22px 36px; } }
     </style>
 </head>
 <body>
 @php
     $nominalRekom = (float) ($handler->nominal_rekom ?? 0);
+    $manualNominal = '................................';
+    $printPeriods = $paymentView['unpaid_periods'] ?? [];
     $text2 = str_replace(
-        ['{nominal_rekom}', '{total_tagihan}', '{tanggal_batas}', '{batas_hari}'],
+        ['{nominal_rekom}', '{total_tagihan}', '{total_tunggakan}', '{tanggal_batas}', '{batas_hari}'],
         [
-            number_format($nominalRekom, 0, ',', '.'),
+            $manualNominal,
             number_format($paymentView['total_bill'], 0, ',', '.'),
+            number_format($paymentView['total_remaining'], 0, ',', '.'),
             $letter['deadline_date']->translatedFormat('d F Y'),
             $letter['deadline_days'].' hari',
         ],
-        $letter['text_2']
+        $letter['text_2_html']
     );
 @endphp
 <button class="print-btn" onclick="window.print()">Cetak</button>
@@ -64,61 +70,23 @@
     <div>ID Yayasan</div><div>: {{ $student->idyayasan }}</div>
     <div>Kelas</div><div>: {{ $student->nama_kelas }}</div>
     <div>Status Pembayaran</div><div>: {{ $student->status_pembayaran }}</div>
-    <div>Nominal Dibayar</div><div>: Rp {{ number_format($nominalRekom, 0, ',', '.') }}</div>
+    <div>Nominal Dibayar</div><div>: Rp {{ $manualNominal }}</div>
 </div>
 
-<p>{{ $letter['text_1'] }}</p>
-<p>{{ $text2 }}</p>
+<p>{!! $letter['text_1_html'] !!}</p>
+<p>{!! $text2 !!}</p>
 
-@forelse($paymentView['periods'] as $period)
-<table>
-    <thead>
-        <tr><th colspan="6">Periode {{ $period['period_id'] }} - {{ $period['kelas_info'] }}</th></tr>
-        <tr><th style="width:36px">No</th><th>Tagihan</th><th>Unit</th><th class="right">Nominal</th><th class="right">Dibayar</th><th class="right">Sisa</th></tr>
-    </thead>
+<table class="summary-table">
+    <thead><tr><th>Uraian</th><th class="right">Nominal</th></tr></thead>
     <tbody>
-        @forelse($period['items'] as $bill)
-            <tr>
-                <td>{{ $loop->iteration }}</td>
-                <td>{{ $bill['name'] }}</td>
-                <td>{{ $bill['unit'] ?? '-' }}</td>
-                <td class="right">Rp {{ number_format($bill['amount'], 0, ',', '.') }}</td>
-                <td class="right">Rp {{ number_format($bill['paid'] ?? 0, 0, ',', '.') }}</td>
-                <td class="right">Rp {{ number_format($bill['remaining'], 0, ',', '.') }}</td>
-            </tr>
-        @empty
-            <tr><td colspan="6" style="text-align:center">Detail item tunggakan tidak tersedia.</td></tr>
-        @endforelse
-        <tr>
-            <th colspan="3" class="right">Subtotal Periode</th>
-            <th class="right">Rp {{ number_format($period['total_billed'], 0, ',', '.') }}</th>
-            <th class="right">Rp {{ number_format($period['total_paid'], 0, ',', '.') }}</th>
-            <th class="right">Rp {{ number_format($period['total_remaining'], 0, ',', '.') }}</th>
-        </tr>
-    </tbody>
-</table>
-@empty
-<table>
-    <tbody><tr><td style="text-align:center">Tidak ada data tunggakan.</td></tr></tbody>
-</table>
-@endforelse
-
-<table>
-    <tbody>
-        <tr>
-            <th class="right">Total Tagihan</th>
-            <th class="right">Total Dibayar</th>
-            <th class="right">Total Sisa</th>
-        </tr>
-        <tr>
-            <td class="right">Rp {{ number_format($paymentView['total_bill'], 0, ',', '.') }}</td>
-            <td class="right">Rp {{ number_format($paymentView['total_paid'], 0, ',', '.') }}</td>
-            <td class="right">Rp {{ number_format($paymentView['total_remaining'], 0, ',', '.') }}</td>
-        </tr>
+        <tr><td>Total Tagihan</td><td class="right">Rp {{ number_format($paymentView['total_bill'], 0, ',', '.') }}</td></tr>
+        <tr><td>Total Dibayar</td><td class="right">Rp {{ number_format($paymentView['total_paid'], 0, ',', '.') }}</td></tr>
+        <tr><td>Nominal Dibayar pada Surat Ini</td><td class="right">Rp {{ $manualNominal }}</td></tr>
+        <tr><th>Total Sisa Tunggakan</th><th class="right">Rp {{ number_format($paymentView['total_remaining'], 0, ',', '.') }}</th></tr>
     </tbody>
 </table>
 
-<p>{{ $letter['text_3'] }}</p>
+<p>{!! $letter['text_3_html'] !!}</p>
 
 <div class="date">{{ $letter['location'] }}, {{ now('Asia/Jakarta')->translatedFormat('d F Y') }}</div>
 <div class="signatures">
@@ -131,5 +99,77 @@
         <div class="name-line">&nbsp;</div>
     </div>
 </div>
+
+<div class="page-break"></div>
+<h2 style="text-align:center; margin:0 0 12px;">DETAIL TUNGGAKAN</h2>
+@forelse($printPeriods as $period)
+<table>
+    <thead>
+        <tr><th colspan="6">Periode {{ $period['period_id'] }} - {{ $period['kelas_info'] }}</th></tr>
+        <tr><th style="width:36px">No</th><th>Kategori</th><th>Unit</th><th class="right">Tagihan</th><th class="right">Dibayar</th><th class="right">Sisa</th></tr>
+    </thead>
+    <tbody>
+        @php($rowNumber = 1)
+        @forelse(($period['categories'] ?? []) as $category)
+            @if(($category['items'] ?? []) === [])
+                <tr>
+                    <td>{{ $rowNumber++ }}</td>
+                    <td>{{ $category['category_name'] }}</td>
+                    <td>-</td>
+                    <td class="right">Rp {{ number_format((float) ($category['summary']['total_paid'] ?? 0), 0, ',', '.') }}</td>
+                    <td class="right">Rp {{ number_format((float) ($category['summary']['total_billed'] ?? 0), 0, ',', '.') }}</td>
+                    <td class="right">Rp {{ number_format(abs((float) ($category['summary']['total_remaining'] ?? 0)), 0, ',', '.') }}</td>
+                </tr>
+            @else
+                @foreach($category['items'] as $bill)
+                    <tr>
+                        <td>{{ $rowNumber++ }}</td>
+                        <td>{{ $category['category_name'] }}</td>
+                        <td>{{ $bill['unit'] ?? '-' }}</td>
+                        <td class="right">Rp {{ number_format($bill['amount'], 0, ',', '.') }}</td>
+                        <td class="right">Rp {{ number_format($bill['paid'] ?? 0, 0, ',', '.') }}</td>
+                        <td class="right">Rp {{ number_format($bill['remaining'], 0, ',', '.') }}</td>
+                    </tr>
+                @endforeach
+            @endif
+        @empty
+            @forelse($period['items'] as $bill)
+                <tr>
+                    <td>{{ $loop->iteration }}</td>
+                    <td>{{ $bill['name'] }}</td>
+                    <td>{{ $bill['unit'] ?? '-' }}</td>
+                    <td class="right">Rp {{ number_format($bill['amount'], 0, ',', '.') }}</td>
+                    <td class="right">Rp {{ number_format($bill['paid'] ?? 0, 0, ',', '.') }}</td>
+                    <td class="right">Rp {{ number_format($bill['remaining'], 0, ',', '.') }}</td>
+                </tr>
+            @empty
+                <tr><td colspan="6" style="text-align:center">Detail item tunggakan tidak tersedia.</td></tr>
+            @endforelse
+        @endforelse
+        <tr>
+            <th colspan="3" class="right">Subtotal Periode</th>
+            <th class="right">Rp {{ number_format($period['total_billed'], 0, ',', '.') }}</th>
+            <th class="right">Rp {{ number_format($period['total_paid'], 0, ',', '.') }}</th>
+            <th class="right">Rp {{ number_format($period['total_remaining'], 0, ',', '.') }}</th>
+        </tr>
+    </tbody>
+</table>
+@empty
+<table>
+    <thead>
+        <tr><th>Keterangan</th><th class="right">Sisa Tunggakan</th></tr>
+    </thead>
+    <tbody>
+        @if((float) ($paymentView['total_remaining'] ?? 0) > 0)
+            <tr>
+                <td>Total tunggakan berdasarkan total_remaining dari API</td>
+                <td class="right">Rp {{ number_format((float) $paymentView['total_remaining'], 0, ',', '.') }}</td>
+            </tr>
+        @else
+            <tr><td colspan="2" style="text-align:center">Tidak ada pembayaran dengan total_remaining lebih dari 0.</td></tr>
+        @endif
+    </tbody>
+</table>
+@endforelse
 </body>
 </html>

@@ -1,10 +1,10 @@
-@extends('layouts.app', ['title' => 'Pembayaran'])
+@extends('layouts.app', ['title' => 'Rekom'])
 
 @section('content')
 <div class="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
     <div>
         <p class="text-sm font-bold uppercase tracking-[0.2em] text-teal-700">Petugas Data</p>
-        <h1 class="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Pembayaran</h1>
+        <h1 class="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Rekom</h1>
         <p class="mt-2 text-sm text-slate-500">Cari siswa, cek status administrasi, dan simpan penanganan rekomendasi.</p>
     </div>
     <form method="post" action="{{ route('students.sync') }}">
@@ -12,6 +12,66 @@
         <button class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/10 transition hover:bg-teal-700">Sync Data</button>
     </form>
 </div>
+
+<section class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    @foreach($paymentSummary as $summary)
+        <button type="button" data-summary-open="summary-{{ $loop->index }}" class="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/10">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <div class="text-xs font-black uppercase tracking-wide text-teal-700">Tingkat</div>
+                    <div class="mt-1 text-2xl font-black text-slate-950">{{ $summary['tingkat'] }}</div>
+                </div>
+                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">{{ $summary['total'] }} siswa</span>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-2">
+                <div class="rounded-2xl bg-emerald-50 p-3"><div class="text-xs font-bold text-emerald-700">Lunas</div><div class="text-xl font-black text-emerald-800">{{ $summary['lunas'] }}</div></div>
+                <div class="rounded-2xl bg-rose-50 p-3"><div class="text-xs font-bold text-rose-700">Belum</div><div class="text-xl font-black text-rose-800">{{ $summary['belum'] }}</div></div>
+            </div>
+        </button>
+
+        <div id="summary-{{ $loop->index }}" data-summary-modal class="fixed inset-0 z-[90] hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+            <div class="max-h-[85vh] w-full max-w-4xl overflow-auto rounded-3xl bg-white shadow-2xl">
+                <div class="sticky top-0 z-10 mb-4 flex items-center justify-between gap-3 border-b border-slate-100 bg-white/95 p-5 backdrop-blur">
+                    <div>
+                        <div class="text-xs font-black uppercase tracking-wide text-teal-700">Detail Pembayaran</div>
+                        <h2 class="mt-1 text-2xl font-black text-slate-950">Tingkat {{ $summary['tingkat'] }}</h2>
+                    </div>
+                    <button type="button" data-summary-close class="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-black text-slate-700">Tutup</button>
+                </div>
+
+                <div class="grid gap-3 p-5 pt-0">
+                    @foreach($summary['classes'] as $class)
+                        <details class="rounded-2xl border border-slate-200 bg-slate-50">
+                            <summary class="flex cursor-pointer list-none flex-col justify-between gap-2 px-4 py-3 sm:flex-row sm:items-center">
+                                <div class="font-black text-slate-950">{{ $class['kelas'] }}</div>
+                                <div class="flex gap-2 text-xs font-black">
+                                    <span class="rounded-full bg-white px-3 py-1 text-slate-700">{{ $class['total'] }} siswa</span>
+                                    <span class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{{ $class['lunas'] }} lunas</span>
+                                    <span class="rounded-full bg-rose-50 px-3 py-1 text-rose-700">{{ $class['belum'] }} belum</span>
+                                </div>
+                            </summary>
+                            <div class="border-t border-slate-200 bg-white p-3">
+                                <div class="grid gap-2 md:grid-cols-2">
+                                    @foreach($class['students'] as $studentItem)
+                                        <div class="rounded-2xl border border-slate-200 p-3">
+                                            <div class="font-black text-slate-950">{{ $studentItem->nama }}</div>
+                                            <div class="mt-1 text-xs font-semibold text-slate-500">{{ $studentItem->idyayasan }}</div>
+                                            <span @class([
+                                                'mt-3 inline-flex rounded-full px-3 py-1 text-xs font-black',
+                                                'bg-emerald-50 text-emerald-700' => $studentItem->status_pembayaran === 'Lunas',
+                                                'bg-rose-50 text-rose-700' => $studentItem->status_pembayaran !== 'Lunas',
+                                            ])>{{ $studentItem->status_pembayaran }}</span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </details>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    @endforeach
+</section>
 
 <form method="get" class="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -54,7 +114,7 @@
                     <td class="whitespace-nowrap px-4 py-4"><span @class(['rounded-full px-3 py-1 text-xs font-black', 'bg-teal-50 text-teal-700' => $student->rekomendasi === 'ya', 'bg-slate-100 text-slate-600' => $student->rekomendasi !== 'ya'])>{{ $student->rekomendasi }}</span></td>
                     <td class="whitespace-nowrap px-4 py-4 font-black text-slate-800">{{ $student->rekomendasi === 'ya' && $student->nominal_rekom ? 'Rp '.number_format((float) $student->nominal_rekom, 0, ',', '.') : '-' }}</td>
                     <td class="whitespace-nowrap px-4 py-4 text-slate-600">{{ $student->rekomendasi === 'ya' ? ($student->handled_by_name ?? '-') : '-' }}</td>
-                    <td class="whitespace-nowrap px-4 py-4 text-right"><a class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700" href="{{ route('students.show', $student->id) }}">Detail</a></td>
+                    <td class="whitespace-nowrap px-4 py-4 text-right"><a data-api-loading class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700" href="{{ route('students.show', $student->id) }}">Detail</a></td>
                 </tr>
             @empty
                 <tr><td colspan="8" class="px-4 py-10 text-center text-slate-500">Data siswa tidak ditemukan.</td></tr>
@@ -64,4 +124,42 @@
     </div>
 </div>
 <div class="mt-5">{{ $students->links() }}</div>
+<div id="api-loading-overlay" class="fixed inset-0 z-[80] hidden items-center justify-center bg-slate-950/70 backdrop-blur-sm">
+    <div class="rounded-3xl bg-white p-6 text-center shadow-2xl">
+        <div class="mx-auto size-12 animate-spin rounded-full border-4 border-slate-200 border-t-teal-600"></div>
+        <div class="mt-4 text-sm font-black text-slate-900">Memuat data pembayaran dari API</div>
+        <div class="mt-1 text-xs font-semibold text-slate-500">Mohon tunggu sebentar.</div>
+    </div>
+</div>
+<script>
+document.querySelectorAll('[data-api-loading]').forEach((link) => {
+    link.addEventListener('click', () => {
+        document.getElementById('api-loading-overlay')?.classList.remove('hidden');
+        document.getElementById('api-loading-overlay')?.classList.add('flex');
+    });
+});
+</script>
+<script>
+document.querySelectorAll('[data-summary-open]').forEach((button) => {
+    button.addEventListener('click', () => {
+        const modal = document.getElementById(button.dataset.summaryOpen);
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
+    });
+});
+document.querySelectorAll('[data-summary-close]').forEach((button) => {
+    button.addEventListener('click', () => {
+        const modal = button.closest('.fixed');
+        modal?.classList.add('hidden');
+        modal?.classList.remove('flex');
+    });
+});
+document.querySelectorAll('[data-summary-modal]').forEach((modal) => {
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    });
+});
+</script>
 @endsection

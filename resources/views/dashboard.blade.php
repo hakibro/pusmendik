@@ -1,55 +1,51 @@
 @extends('layouts.app', ['title' => 'Beranda Pusmendik'])
 
 @section('content')
-<section class="overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl shadow-slate-900/20">
+<section class="relative z-20 rounded-[2rem] bg-slate-950 text-white shadow-2xl shadow-slate-900/20">
     <div class="grid gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[1.15fr_.85fr] lg:px-12 lg:py-14">
         <div class="flex flex-col justify-center">
-            <span class="mb-4 inline-flex w-fit rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-100">Portal Ujian SMK Darut Taqwa</span>
-            <h1 class="max-w-3xl text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">Beranda informasi ujian yang cepat, rapi, dan siap dipakai.</h1>
-            <p class="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">Cek administrasi, jadwal, ruangan, sesi, pengawas, dan progres ujian dari satu tempat. Petugas data dapat masuk untuk menangani rekomendasi pembayaran.</p>
-            <div class="relative mt-7 max-w-xl">
-                <form method="get" action="{{ route('payments.status') }}" class="flex flex-col gap-3 rounded-3xl bg-white p-2 shadow-xl shadow-black/20 sm:flex-row">
-                    <input id="home-student-search" name="q" autocomplete="off" class="min-h-12 flex-1 rounded-2xl border-0 px-4 text-slate-900 outline-none ring-1 ring-transparent placeholder:text-slate-400 focus:ring-teal-500" placeholder="Ketik nama atau ID Yayasan siswa">
+            <span class="mb-4 inline-flex w-fit rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-100">Pusat Informasi Ujian</span>
+            <h1 class="max-w-3xl text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">Informasi ujian sekolah dalam satu layar yang mudah dicek.</h1>
+            <p class="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">Pusmendik membantu siswa, wali, dan petugas melihat kesiapan administrasi, jadwal, ruangan, kehadiran, dan hasil ujian dari data terbaru.</p>
+        </div>
+        <div class="grid content-center gap-3">
+            <div class="relative rounded-3xl bg-white p-4 text-slate-950 shadow-xl">
+                <div class="px-1 pb-3">
+                    <div class="text-sm font-black text-teal-700">Cek Administrasi</div>
+                    <div class="mt-1 text-2xl font-black">Status Pembayaran</div>
+                </div>
+                <form method="get" action="{{ route('payments.status') }}" class="flex flex-col gap-3 rounded-3xl bg-slate-100 p-2">
+                    <input id="home-student-search" name="q" autocomplete="off" class="min-h-12 rounded-2xl border border-transparent bg-white px-4 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100" placeholder="Ketik nama atau ID Yayasan siswa">
                     <button disabled class="min-h-12 rounded-2xl bg-slate-200 px-6 text-sm font-black text-slate-500">Cek Status Pembayaran</button>
                 </form>
-                <div id="home-student-results" class="absolute left-0 right-0 top-full z-20 mt-2 hidden overflow-hidden rounded-3xl border border-slate-200 bg-white text-left text-slate-900 shadow-2xl shadow-slate-900/20"></div>
+                <div id="home-student-results" class="absolute left-0 right-0 top-full z-[90] mt-2 hidden max-h-80 overflow-auto rounded-3xl border border-slate-200 bg-white text-left text-slate-900 shadow-2xl shadow-slate-900/30"></div>
             </div>
-        </div>
-        <div class="grid content-center gap-4">
-            <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur">
-                <div class="text-sm font-semibold text-slate-300">Status hari ini</div>
-                <div class="mt-4 grid grid-cols-2 gap-3">
-                    <div class="rounded-2xl bg-white p-4 text-slate-950"><div class="text-2xl font-black">{{ number_format($stats['siswa']) }}</div><div class="text-xs font-bold text-slate-500">Siswa aktif</div></div>
-                    <div class="rounded-2xl bg-white p-4 text-slate-950"><div class="text-2xl font-black">{{ number_format($stats['lunas']) }}</div><div class="text-xs font-bold text-slate-500">Lunas</div></div>
-                    <div class="rounded-2xl bg-white p-4 text-slate-950"><div class="text-2xl font-black">{{ number_format($stats['rekom']) }}</div><div class="text-xs font-bold text-slate-500">Rekom</div></div>
-                    <div class="rounded-2xl bg-white p-4 text-slate-950"><div class="text-2xl font-black">{{ number_format($stats['jadwal']) }}</div><div class="text-xs font-bold text-slate-500">Jadwal</div></div>
-                </div>
+            <div class="grid grid-cols-2 gap-3">
+                <a href="{{ route('schedules.index') }}" class="rounded-3xl bg-white/10 p-4 font-black text-white ring-1 ring-white/10 transition hover:bg-white/15">Jadwal</a>
+                <a href="{{ route('rooms.index') }}" class="rounded-3xl bg-white/10 p-4 font-black text-white ring-1 ring-white/10 transition hover:bg-white/15">Ruangan</a>
+                <a href="{{ route('supervisors.index') }}" class="rounded-3xl bg-white/10 p-4 font-black text-white ring-1 ring-white/10 transition hover:bg-white/15">Pengawas</a>
+                <a href="{{ route('results.index') }}" class="rounded-3xl bg-white/10 p-4 font-black text-white ring-1 ring-white/10 transition hover:bg-white/15">Hasil Ujian</a>
             </div>
         </div>
     </div>
 </section>
 
-<section class="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-    <a href="{{ route('payments.status') }}" class="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/10">
-        <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">ID</div>
-        <h2 class="text-lg font-black">Cek Pembayaran</h2>
-        <p class="mt-2 text-sm leading-6 text-slate-500">Verifikasi ringkasan administrasi siswa menggunakan ID Yayasan.</p>
-    </a>
-    <a href="{{ route('schedules.index') }}" class="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/10">
-        <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-700">JW</div>
-        <h2 class="text-lg font-black">Jadwal Ujian</h2>
-        <p class="mt-2 text-sm leading-6 text-slate-500">Pantau tanggal, mapel, durasi, dan status ujian.</p>
-    </a>
-    <a href="{{ route('rooms.index') }}" class="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/10">
-        <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">RS</div>
-        <h2 class="text-lg font-black">Ruangan & Sesi</h2>
-        <p class="mt-2 text-sm leading-6 text-slate-500">Cari penempatan siswa berdasarkan ruangan, sesi, tingkat, dan kelas.</p>
-    </a>
-    <a href="{{ route('live.index') }}" class="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/10">
-        <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-700">LV</div>
-        <h2 class="text-lg font-black">Live Ujian</h2>
-        <p class="mt-2 text-sm leading-6 text-slate-500">Lihat progres jawaban siswa pada sesi aktif.</p>
-    </a>
+<section class="mt-8 grid gap-4 md:grid-cols-3">
+    <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="text-sm font-black uppercase tracking-wide text-teal-700">Administrasi</div>
+        <h2 class="mt-2 text-xl font-black text-slate-950">Cek sebelum ujian</h2>
+        <p class="mt-2 text-sm leading-6 text-slate-500">Siswa dapat mengecek ringkasan pembayaran dan status rekomendasi sebelum mengikuti ujian.</p>
+    </article>
+    <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="text-sm font-black uppercase tracking-wide text-sky-700">Pelaksanaan</div>
+        <h2 class="mt-2 text-xl font-black text-slate-950">Jadwal, sesi, ruangan</h2>
+        <p class="mt-2 text-sm leading-6 text-slate-500">Informasi ujian disusun berdasarkan tanggal, ruangan, sesi, dan penempatan siswa.</p>
+    </article>
+    <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="text-sm font-black uppercase tracking-wide text-rose-700">Monitoring</div>
+        <h2 class="mt-2 text-xl font-black text-slate-950">Live progres ujian</h2>
+        <p class="mt-2 text-sm leading-6 text-slate-500">Petugas dapat memantau pengerjaan siswa pada sesi aktif dan rekap kehadiran.</p>
+    </article>
 </section>
 
 <section class="mt-8 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -73,6 +69,7 @@
         </table>
     </div>
 </section>
+
 <script>
 (() => {
     const input = document.getElementById('home-student-search');

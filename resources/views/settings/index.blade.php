@@ -40,13 +40,15 @@
         </div>
         <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">Teks Isi 1
             <textarea name="surat_teks_1" class="min-h-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">{{ old('surat_teks_1', $settings['surat_teks_1'] ?? 'Dengan ini, saya mengajukan pembayaran terkait administrasi agar anak saya dapat mengikuti Ujian Asesmen Sumatif Akhir Semester (ASAS) Semester Genap.') }}</textarea>
+            <span class="text-xs font-semibold normal-case tracking-normal text-slate-400">Format: **tebal**, *miring*, ==highlight==.</span>
         </label>
         <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">Teks Isi 2
             <textarea name="surat_teks_2" class="min-h-28 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">{{ old('surat_teks_2', $settings['surat_teks_2'] ?? 'Adapun pembayaran yang telah saya lakukan sebesar Rp {nominal_rekom}, dari Rp {total_tagihan} akan saya lunasi paling lambat pada {tanggal_batas} sesuai dengan ketentuan pembayaran Net {batas_hari} dari tanggal pembuatan surat ini.') }}</textarea>
-            <span class="text-xs font-semibold normal-case tracking-normal text-slate-400">Placeholder: {nominal_rekom}, {total_tagihan}, {tanggal_batas}, {batas_hari}</span>
+            <span class="text-xs font-semibold normal-case tracking-normal text-slate-400">Placeholder: {nominal_rekom}, {total_tagihan}, {total_tunggakan}, {tanggal_batas}, {batas_hari}. Format: **tebal**, *miring*, ==highlight==.</span>
         </label>
         <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">Teks Isi 3
             <textarea name="surat_teks_3" class="min-h-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">{{ old('surat_teks_3', $settings['surat_teks_3'] ?? 'Demikian pernyataan ini saya buat dengan sebenar-benarnya dan dapat dipergunakan sebagaimana mestinya.') }}</textarea>
+            <span class="text-xs font-semibold normal-case tracking-normal text-slate-400">Format: **tebal**, *miring*, ==highlight==.</span>
         </label>
         <button class="mt-2 w-fit rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-sm shadow-teal-600/20 transition hover:bg-teal-700">Simpan Setting</button>
     </form>

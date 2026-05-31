@@ -16,6 +16,8 @@ Route::get('/ruangan-sesi', [PusmendikController::class, 'rooms'])->name('rooms.
 Route::get('/pengawas', [PusmendikController::class, 'supervisors'])->name('supervisors.index');
 Route::get('/live-ujian', [PusmendikController::class, 'liveExam'])->name('live.index');
 Route::get('/kehadiran', [PusmendikController::class, 'attendance'])->name('attendance.index');
+Route::get('/hasil-ujian', [PusmendikController::class, 'examResults'])->name('results.index');
+Route::get('/hasil-ujian/download', [PusmendikController::class, 'downloadExamResults'])->name('results.download');
 
 Route::middleware('data.user')->group(function () {
     Route::get('/siswa', [PusmendikController::class, 'students'])->name('students.index');
@@ -23,7 +25,6 @@ Route::middleware('data.user')->group(function () {
     Route::get('/siswa/{id}', [PusmendikController::class, 'studentDetail'])->name('students.show');
     Route::post('/siswa/{id}/rekomendasi', [PusmendikController::class, 'saveRecommendation'])->name('students.recommendation');
     Route::get('/siswa/{id}/rekomendasi/cetak', [PusmendikController::class, 'printRecommendation'])->name('students.print');
-    Route::get('/users-data', [PusmendikController::class, 'users'])->name('users.index');
     Route::get('/settings', [PusmendikController::class, 'settings'])->name('settings.index');
     Route::post('/settings', [PusmendikController::class, 'saveSettings'])->name('settings.store');
 });
