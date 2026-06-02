@@ -50,8 +50,8 @@ class PusmendikController extends Controller
         return view('dashboard', [
             'stats' => [
                 'siswa' => (clone $students)->count(),
-                'lunas' => (clone $students)->where(DB::raw('COALESCE(sta.status_pembayaran, siswa.status_pembayaran)'), 'Lunas')->count(),
-                'rekom' => (clone $students)->where(DB::raw('COALESCE(sta.rekomendasi, siswa.rekomendasi)'), 'ya')->count(),
+                'lunas' => (clone $students)->where('sta.status_pembayaran', 'Lunas')->count(),
+                'rekom' => (clone $students)->where('sta.rekomendasi', 'ya')->count(),
                 'jadwal' => $exam->table('jadwal_ujian')
                     ->when($activeAcademicYearId, fn($query) => $query->where('tahun_ajaran_id', $activeAcademicYearId))
                     ->when($activeExamPackageId, fn($query) => $query->where('paket_ujian_id', $activeExamPackageId))
@@ -89,8 +89,8 @@ class PusmendikController extends Controller
                     ->orWhere('siswa.nis', 'like', "%{$q}%"));
             })
             ->when($request->filled('kelas'), fn($query) => $query->where('kelas.nama_kelas', $request->kelas))
-            ->when($request->filled('status_pembayaran'), fn($query) => $query->where(DB::raw('COALESCE(sta.status_pembayaran, siswa.status_pembayaran)'), $request->status_pembayaran))
-            ->when($request->filled('rekomendasi'), fn($query) => $query->where(DB::raw('COALESCE(sta.rekomendasi, siswa.rekomendasi)'), $request->rekomendasi))
+            ->when($request->filled('status_pembayaran'), fn($query) => $query->where('sta.status_pembayaran', $request->status_pembayaran))
+            ->when($request->filled('rekomendasi'), fn($query) => $query->where('sta.rekomendasi', $request->rekomendasi))
             ->when($request->filled('petugas'), fn($query) => $query->where('recommendation_handlers.handled_by_name', $request->petugas));
 
         return view('students.index', [
@@ -150,11 +150,6 @@ class PusmendikController extends Controller
             'updated_at' => now(),
         ]);
 
-        $this->exam()->table('siswa')->where('id', $id)->update([
-            'rekomendasi' => 'ya',
-            'catatan_rekomendasi' => $catatanRekomendasi,
-            'updated_at' => now(),
-        ]);
 
         if ($student->tahun_ajaran_id) {
             $this->exam()->table('siswa_tahun_ajaran')
