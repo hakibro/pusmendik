@@ -592,7 +592,7 @@ class PusmendikController extends Controller
                     $join->where('sta.tahun_ajaran_id', $activeAcademicYearId);
                 }
             })
-            ->leftJoin('kelas', 'kelas.id', '=', DB::raw('COALESCE(sta.kelas_id)'))
+            ->leftJoin('kelas', 'kelas.id', '=', DB::raw('COALESCE(sta.kelas_id, siswa.kelas_id)'))
             ->whereNull('siswa.deleted_at')
             ->select(array_merge([
                 'siswa.*',
