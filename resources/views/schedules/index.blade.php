@@ -51,7 +51,7 @@
 
                             <div class="mt-1.5 flex items-center gap-1.5 text-[10px]">
                                 <p class="whitespace-nowrap text-slate-400">
-                                    {{ $item->nama_mapel ?? '-' }}
+                                    {{ $item->nama_mapel ?? '-' }} @if($item->paket_ujian_nama) / {{ $item->paket_ujian_nama }} @endif
                                 </p>
 
                                 <span class="text-slate-200">•</span>

@@ -167,6 +167,17 @@ document.addEventListener('click', (event) => {
     if (popup.contains(event.target) || event.target.closest('a[href="#info-ujian-popup"]')) return;
     popup.classList.add('hidden');
 });
+document.querySelectorAll('form select').forEach((select) => {
+    select.addEventListener('change', () => {
+        const form = select.form;
+        if (!form) return;
+        if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+            return;
+        }
+        form.submit();
+    });
+});
 </script>
 </body>
 </html>

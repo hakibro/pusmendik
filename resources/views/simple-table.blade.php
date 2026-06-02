@@ -17,8 +17,9 @@
                 @if(isset($filterOptions[$name]))
                     <select name="{{ $name }}" class="min-h-11 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold normal-case tracking-normal text-slate-800 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
                         <option value="">Semua</option>
-                        @foreach($filterOptions[$name] as $option)
-                            <option value="{{ $option }}" @selected((string) request($name) === (string) $option)>{{ $option }}</option>
+                        @foreach($filterOptions[$name] as $value => $option)
+                            @php($optionValue = is_int($value) ? $option : $value)
+                            <option value="{{ $optionValue }}" @selected((string) request($name) === (string) $optionValue)>{{ $option }}</option>
                         @endforeach
                     </select>
                 @else
