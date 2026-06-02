@@ -34,7 +34,7 @@ class PusmendikController extends Controller
     private function activeExamPackageId(?int $tahunAjaranId = null): ?int
     {
         return $this->exam()->table('paket_ujian')
-            ->when($tahunAjaranId, fn ($query) => $query->where('tahun_ajaran_id', $tahunAjaranId))
+            ->when($tahunAjaranId, fn($query) => $query->where('tahun_ajaran_id', $tahunAjaranId))
             ->where('status', 'aktif')
             ->orderByDesc('id')
             ->value('id');
@@ -592,7 +592,7 @@ class PusmendikController extends Controller
                     $join->where('sta.tahun_ajaran_id', $activeAcademicYearId);
                 }
             })
-            ->leftJoin('kelas', 'kelas.id', '=', DB::raw('COALESCE(sta.kelas_id, siswa.kelas_id)'))
+            ->leftJoin('kelas', 'kelas.id', '=', DB::raw('COALESCE(sta.kelas_id)'))
             ->whereNull('siswa.deleted_at')
             ->select(array_merge([
                 'siswa.*',
