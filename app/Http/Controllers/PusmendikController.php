@@ -329,7 +329,7 @@ class PusmendikController extends Controller
                     $join->where('sta.tahun_ajaran_id', $activeAcademicYearId);
                 }
             })
-            ->leftJoin('kelas', 'kelas.id', '=', DB::raw('COALESCE(sta.kelas_id, siswa.kelas_id)'))
+            ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
             ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
             ->select('siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'sr.nama_sesi', 'sr.waktu_mulai', 'sr.waktu_selesai', 'ruangan.nama_ruangan', 'srs.status_kehadiran')
             ->whereNull('siswa.deleted_at')
@@ -516,7 +516,7 @@ class PusmendikController extends Controller
                     $join->where('sta.tahun_ajaran_id', $activeAcademicYearId);
                 }
             })
-            ->leftJoin('kelas', 'kelas.id', '=', DB::raw('COALESCE(sta.kelas_id, siswa.kelas_id)'))
+            ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
             ->leftJoin('jadwal_ujian as ju', 'ju.id', '=', 'e.jadwal_ujian_id')
             ->leftJoin('sesi_ruangan as sr', 'sr.id', '=', 'e.sesi_ruangan_id')
             ->leftJoin('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
@@ -588,21 +588,23 @@ class PusmendikController extends Controller
         return $this->exam()->table('siswa')
             ->leftJoin('siswa_tahun_ajaran as sta', function ($join) use ($activeAcademicYearId) {
                 $join->on('sta.siswa_id', '=', 'siswa.id');
+
                 if ($activeAcademicYearId) {
                     $join->where('sta.tahun_ajaran_id', $activeAcademicYearId);
                 }
             })
-            ->leftJoin('kelas', 'kelas.id', '=', DB::raw('COALESCE(sta.kelas_id, siswa.kelas_id)'))
+            ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
             ->whereNull('siswa.deleted_at')
             ->select(array_merge([
                 'siswa.*',
-                DB::raw('COALESCE(sta.status_pembayaran, siswa.status_pembayaran) as status_pembayaran'),
-                DB::raw('COALESCE(sta.rekomendasi, siswa.rekomendasi) as rekomendasi'),
-                DB::raw('COALESCE(sta.catatan, siswa.catatan_rekomendasi) as catatan_rekomendasi'),
+                DB::raw('sta.status_pembayaran as status_pembayaran'),
+                DB::raw('sta.rekomendasi as rekomendasi'),
+                DB::raw('sta.catatan as catatan_rekomendasi'),
                 'kelas.nama_kelas',
                 'kelas.tingkat',
                 'kelas.jurusan',
                 'sta.tahun_ajaran_id',
+                'sta.kelas_id',
             ], $extraSelects));
     }
 
@@ -651,7 +653,7 @@ class PusmendikController extends Controller
                     $join->where('sta.tahun_ajaran_id', $activeAcademicYearId);
                 }
             })
-            ->leftJoin('kelas', 'kelas.id', '=', DB::raw('COALESCE(sta.kelas_id, siswa.kelas_id)'))
+            ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
             ->join('jadwal_ujian as ju', 'ju.id', '=', 'h.jadwal_ujian_id')
             ->leftJoin('mapel', 'mapel.id', '=', 'ju.mapel_id')
             ->leftJoin('tahun_ajaran', 'tahun_ajaran.id', '=', 'ju.tahun_ajaran_id')
@@ -901,7 +903,7 @@ class PusmendikController extends Controller
     private function paymentSummaryByLevel(): array
     {
         return $this->studentQuery()
-            ->select('siswa.id', 'siswa.idyayasan', 'siswa.nama', DB::raw('COALESCE(sta.status_pembayaran, siswa.status_pembayaran) as status_pembayaran'), 'kelas.tingkat', 'kelas.nama_kelas')
+            ->select('siswa.id', 'siswa.idyayasan', 'siswa.nama', DB::raw('sta.status_pembayaran as status_pembayaran'), 'kelas.tingkat', 'kelas.nama_kelas')
             ->orderBy('kelas.tingkat')
             ->orderBy('kelas.nama_kelas')
             ->orderBy('siswa.nama')
