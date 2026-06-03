@@ -24,8 +24,7 @@ class PusmendikController extends Controller
     private function activeAcademicYearId(): ?int
     {
         return $this->exam()->table('tahun_ajaran')
-            ->where('is_active', 1)
-            ->orWhere('status', 'aktif')
+            ->where(fn($query) => $query->where('is_active', 1)->orWhere('status', 'aktif'))
             ->orderByDesc('is_active')
             ->orderByDesc('id')
             ->value('id');
@@ -591,7 +590,17 @@ class PusmendikController extends Controller
             ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
             ->whereNull('siswa.deleted_at')
             ->select(array_merge([
-                'siswa.*',
+                'siswa.id',
+                'siswa.nis',
+                'siswa.idyayasan',
+                'siswa.nama',
+                'siswa.email',
+                'siswa.email_verified_at',
+                'siswa.password',
+                'siswa.remember_token',
+                'siswa.created_at',
+                'siswa.updated_at',
+                'siswa.deleted_at',
                 DB::raw('sta.status_pembayaran as status_pembayaran'),
                 DB::raw('sta.rekomendasi as rekomendasi'),
                 DB::raw('sta.catatan as catatan_rekomendasi'),
