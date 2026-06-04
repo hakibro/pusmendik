@@ -8,12 +8,6 @@
 <div class="max-w-3xl rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
     <form method="post" action="{{ route('settings.store') }}" class="grid gap-4">
         @csrf
-        <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">API Sync Data Siswa Sistem Ujian
-            <input type="url" name="exam_sync_api_url" value="{{ old('exam_sync_api_url', $settings['exam_sync_api_url'] ?? '') }}" placeholder="https://..." class="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
-        </label>
-        <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">API Set Status Rekomendasi Sistem Ujian
-            <input type="url" name="exam_rekom_api_url" value="{{ old('exam_rekom_api_url', $settings['exam_rekom_api_url'] ?? '') }}" placeholder="https://..." class="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
-        </label>
         <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">Base URL API Pembayaran
             <input type="url" name="payment_api_base_url" value="{{ old('payment_api_base_url', $settings['payment_api_base_url'] ?? env('PAYMENT_API_BASE_URL')) }}" class="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
         </label>

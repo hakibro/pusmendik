@@ -1,16 +1,12 @@
 @extends('layouts.app', ['title' => 'Rekom'])
 
 @section('content')
-<div class="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+<div class="mb-6">
     <div>
         <p class="text-sm font-bold uppercase tracking-[0.2em] text-teal-700">Petugas Data</p>
         <h1 class="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Rekom</h1>
         <p class="mt-2 text-sm text-slate-500">Cari siswa, cek status administrasi, dan simpan penanganan rekomendasi.</p>
     </div>
-    <form method="post" action="{{ route('students.sync') }}">
-        @csrf
-        <button class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/10 transition hover:bg-teal-700">Sync Data</button>
-    </form>
 </div>
 
 <section class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">

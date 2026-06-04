@@ -2,12 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
 
 class PusmendikController extends Controller
 {
@@ -161,15 +159,6 @@ class PusmendikController extends Controller
                 ]);
         }
 
-        if ($url = $this->setting('exam_rekom_api_url')) {
-            Http::timeout(10)->asJson()->post($url, [
-                'siswa_id' => $student->id,
-                'idyayasan' => $student->idyayasan,
-                'rekomendasi' => 'ya',
-                'nominal_rekom' => $data['nominal_rekom'],
-            ]);
-        }
-
         return back()->with('success', 'Nominal rekom disimpan dan status rekomendasi diset ya.');
     }
 
@@ -212,24 +201,6 @@ class PusmendikController extends Controller
         $letter['text_2_html'] = $this->formatLetterText($letter['text_2']);
 
         return view('students.print', compact('student', 'handler', 'paymentView', 'letter'));
-    }
-
-    public function syncStudents()
-    {
-        $url = $this->setting('exam_sync_api_url');
-
-        if (!$url) {
-            return back()->with('error', 'Link API sinkronisasi belum diatur di Setting.');
-        }
-
-        try {
-            $response = Http::timeout(30)->post($url);
-            $response->throw();
-        } catch (RequestException $exception) {
-            return back()->with('error', 'Sinkronisasi gagal: ' . $exception->getMessage());
-        }
-
-        return back()->with('success', 'Trigger sinkronisasi terkirim. Respons: ' . Str::limit($response->body(), 160));
     }
 
     public function paymentStatus(Request $request)
@@ -552,8 +523,6 @@ class PusmendikController extends Controller
     public function saveSettings(Request $request)
     {
         $data = $request->validate([
-            'exam_sync_api_url' => ['nullable', 'url'],
-            'exam_rekom_api_url' => ['nullable', 'url'],
             'payment_api_base_url' => ['nullable', 'url'],
             'surat_logo' => ['nullable', 'string'],
             'surat_kop_baris_1' => ['nullable', 'string'],

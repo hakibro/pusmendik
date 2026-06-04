@@ -21,7 +21,6 @@ Route::get('/hasil-ujian/download', [PusmendikController::class, 'downloadExamRe
 
 Route::middleware('data.user')->group(function () {
     Route::get('/siswa', [PusmendikController::class, 'students'])->name('students.index');
-    Route::post('/siswa/sync', [PusmendikController::class, 'syncStudents'])->name('students.sync');
     Route::get('/siswa/{id}', [PusmendikController::class, 'studentDetail'])->name('students.show');
     Route::post('/siswa/{id}/rekomendasi', [PusmendikController::class, 'saveRecommendation'])->name('students.recommendation');
     Route::get('/siswa/{id}/rekomendasi/cetak', [PusmendikController::class, 'printRecommendation'])->name('students.print');
