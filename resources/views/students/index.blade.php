@@ -106,14 +106,15 @@
             <thead class="bg-slate-100/80"><tr><th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">ID Yayasan</th><th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Nama</th><th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Kelas</th><th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Pembayaran</th><th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Rekom</th><th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Nominal Rekom</th><th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Petugas</th><th class="px-4 py-3"></th></tr></thead>
             <tbody class="divide-y divide-slate-100">
             @forelse($students as $student)
+                @php($statusRekom = $student->rekomendasi ?: 'tidak')
                 <tr class="transition hover:bg-teal-50/40">
                     <td class="whitespace-nowrap px-4 py-4 font-black text-slate-950">{{ $student->idyayasan }}</td>
                     <td class="min-w-64 px-4 py-4 font-semibold text-slate-800">{{ $student->nama }}</td>
                     <td class="whitespace-nowrap px-4 py-4 text-slate-600">{{ $student->nama_kelas }}</td>
                     <td class="whitespace-nowrap px-4 py-4"><span @class(['rounded-full px-3 py-1 text-xs font-black', 'bg-emerald-50 text-emerald-700' => $student->status_pembayaran === 'Lunas', 'bg-rose-50 text-rose-700' => $student->status_pembayaran !== 'Lunas'])>{{ $student->status_pembayaran }}</span></td>
-                    <td class="whitespace-nowrap px-4 py-4"><span @class(['rounded-full px-3 py-1 text-xs font-black', 'bg-teal-50 text-teal-700' => $student->rekomendasi === 'ya', 'bg-slate-100 text-slate-600' => $student->rekomendasi !== 'ya'])>{{ $student->rekomendasi }}</span></td>
-                    <td class="whitespace-nowrap px-4 py-4 font-black text-slate-800">{{ $student->rekomendasi === 'ya' && $student->nominal_rekom ? 'Rp '.number_format((float) $student->nominal_rekom, 0, ',', '.') : '-' }}</td>
-                    <td class="whitespace-nowrap px-4 py-4 text-slate-600">{{ $student->rekomendasi === 'ya' ? ($student->handled_by_name ?? '-') : '-' }}</td>
+                    <td class="whitespace-nowrap px-4 py-4"><span @class(['rounded-full px-3 py-1 text-xs font-black', 'bg-teal-50 text-teal-700' => $statusRekom === 'ya', 'bg-slate-100 text-slate-600' => $statusRekom !== 'ya'])>{{ $statusRekom }}</span></td>
+                    <td class="whitespace-nowrap px-4 py-4 font-black text-slate-800">{{ $statusRekom === 'ya' && $student->nominal_rekom ? 'Rp '.number_format((float) $student->nominal_rekom, 0, ',', '.') : '-' }}</td>
+                    <td class="whitespace-nowrap px-4 py-4 text-slate-600">{{ $statusRekom === 'ya' ? ($student->handled_by_name ?? '-') : '-' }}</td>
                     <td class="whitespace-nowrap px-4 py-4 text-right"><a data-api-loading class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700" href="{{ route('students.show', $student->id) }}">Detail</a></td>
                 </tr>
             @empty

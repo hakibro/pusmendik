@@ -89,7 +89,7 @@ class PusmendikController extends Controller
             })
             ->when($request->filled('kelas'), fn($query) => $query->where('kelas.nama_kelas', $request->kelas))
             ->when($request->filled('status_pembayaran'), fn($query) => $query->where('sta.status_pembayaran', $request->status_pembayaran))
-            ->when($request->filled('rekomendasi'), fn($query) => $query->where('sta.rekomendasi', $request->rekomendasi))
+            ->when($request->filled('rekomendasi'), fn($query) => $query->where(DB::raw("COALESCE(sta.rekomendasi, 'tidak')"), $request->rekomendasi))
             ->when($request->filled('petugas'), fn($query) => $query->where('recommendation_handlers.handled_by_name', $request->petugas));
 
         return view('students.index', [
@@ -602,7 +602,7 @@ class PusmendikController extends Controller
                 'siswa.updated_at',
                 'siswa.deleted_at',
                 DB::raw('sta.status_pembayaran as status_pembayaran'),
-                DB::raw('sta.rekomendasi as rekomendasi'),
+                DB::raw("COALESCE(sta.rekomendasi, 'tidak') as rekomendasi"),
                 DB::raw('sta.catatan as catatan_rekomendasi'),
                 'kelas.nama_kelas',
                 'kelas.tingkat',

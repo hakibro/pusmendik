@@ -1,0 +1,2 @@
+- pada rekom:
+    - beri handler pada nilai null = tidak pada filter maupun tabel.
