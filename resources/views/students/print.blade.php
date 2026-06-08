@@ -162,7 +162,7 @@
 <body>
     @php
         $nominalRekom = (float) ($handler->nominal_rekom ?? 0);
-        $manualNominal = '................................';
+        $manualNominal = number_format($nominalRekom, 0, ',', '.');
         $printPeriods = $paymentView['unpaid_periods'] ?? [];
         $text2 = str_replace(
             ['{nominal_rekom}', '{total_tagihan}', '{total_tunggakan}', '{tanggal_batas}', '{batas_hari}'],
