@@ -251,6 +251,65 @@ class PusmendikController extends Controller
         );
     }
 
+    public function rekomStudentSearch(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+
+        $localDatabase = DB::connection()->getDatabaseName();
+        $handlerTable = DB::raw("`{$localDatabase}`.`recommendation_handlers`");
+        $handlerJoinTable = DB::raw("`{$localDatabase}`.`recommendation_handlers` as recommendation_handlers");
+        $latestHandlers = $this->exam()->table($handlerTable)
+            ->select('exam_siswa_id', DB::raw('MAX(id) as latest_id'))
+            ->groupBy('exam_siswa_id');
+
+        $query = $this->studentQuery(['recommendation_handlers.nominal_rekom', 'recommendation_handlers.handled_by_name'])
+            ->leftJoinSub($latestHandlers, 'latest_handlers', fn($join) => $join->on('latest_handlers.exam_siswa_id', '=', 'siswa.id'))
+            ->leftJoin($handlerJoinTable, 'recommendation_handlers.id', '=', 'latest_handlers.latest_id');
+
+        if (mb_strlen($q) >= 2) {
+            $query->where(fn($inner) => $inner
+                ->where('siswa.nama', 'like', "%{$q}%")
+                ->orWhere('siswa.idyayasan', 'like', "%{$q}%")
+                ->orWhere('siswa.nis', 'like', "%{$q}%"));
+        }
+
+        if ($request->filled('kelas')) {
+            $query->where('kelas.nama_kelas', $request->kelas);
+        }
+
+        if ($request->filled('status_pembayaran')) {
+            $query->where('sta.status_pembayaran', $request->status_pembayaran);
+        }
+
+        if ($request->filled('rekomendasi')) {
+            $query->where(DB::raw("COALESCE(sta.rekomendasi, 'tidak')"), $request->rekomendasi);
+        }
+
+        if ($request->filled('petugas')) {
+            $query->where('recommendation_handlers.handled_by_name', $request->petugas);
+        }
+
+        return response()->json(
+            $query
+                ->orderBy('kelas.tingkat')
+                ->orderBy('kelas.nama_kelas')
+                ->orderBy('siswa.nama')
+                ->limit(50)
+                ->get()
+                ->map(fn($student) => [
+                    'id' => $student->id,
+                    'idyayasan' => $student->idyayasan,
+                    'nama' => $student->nama,
+                    'kelas' => $student->nama_kelas,
+                    'status_pembayaran' => $student->status_pembayaran,
+                    'rekomendasi' => $student->rekomendasi ?: 'tidak',
+                    'nominal_rekom' => $student->nominal_rekom,
+                    'handled_by_name' => $student->handled_by_name,
+                    'url' => route('students.show', $student->id),
+                ])
+        );
+    }
+
     public function schedules(Request $request)
     {
         $activeAcademicYearId = $this->activeAcademicYearId();
