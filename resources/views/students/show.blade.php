@@ -193,7 +193,7 @@
                 @csrf
                 <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">Nominal Rekom
                     <input type="text" name="nominal_rekom" id="nominal-rekom-input" inputmode="numeric"
-                        value="{{ old('nominal_rekom', $handler->nominal_rekom ?? '') }}" required
+                        value="{{ old('nominal_rekom', $handler ? (int) $handler->nominal_rekom : '') }}" required
                         class="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
                 </label>
                 <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">Catatan Tambahan
@@ -241,8 +241,9 @@
 
             function unformatRupiah(value) {
                 if (!value) return '';
-                // Remove all dots (thousand separators)
-                return value.replace(/\./g, '').replace(/[^\d]/g, '');
+                // Ambil bagian integer saja (buang koma/titik desimal)
+                const cleaned = value.replace(/\./g, '').replace(/,.*$/, '');
+                return cleaned.replace(/[^\d]/g, '');
             }
         })();
     </script>
