@@ -12,6 +12,8 @@
         }
         return $value === null || $value === '' ? '-' : (string) $value;
     };
+    $formatDate = fn($value) => $value ? \Illuminate\Support\Carbon::parse($value)->translatedFormat('d M Y') : '-';
+    $formatTime = fn($value) => $value ? \Illuminate\Support\Carbon::parse($value)->format('H:i') : '-';
 @endphp
 
 @section('content')
@@ -44,6 +46,98 @@
                 {{ number_format($paymentView['total_remaining'], 0, ',', '.') }}</div>
         </div>
     </div>
+
+    <section class="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+            <div>
+                <h2 class="text-xl font-black">Informasi Ujian Aktif</h2>
+                <p class="mt-1 text-sm text-slate-500">Data diambil dari tahun ajaran aktif dan paket ujian aktif.</p>
+            </div>
+            <div class="flex flex-wrap gap-2 text-xs font-black">
+                <span class="rounded-full bg-teal-50 px-3 py-1 text-teal-700">TA:
+                    {{ $examInfo['academicYear']->nama ?? '-' }}</span>
+                <span class="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">Paket:
+                    {{ $examInfo['examPackage']->nama ?? '-' }}</span>
+            </div>
+        </div>
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-3">
+            <div class="rounded-2xl border border-slate-200">
+                <div class="border-b border-slate-200 px-4 py-3">
+                    <h3 class="font-black text-slate-950">Ruangan & Sesi</h3>
+                </div>
+                <div class="divide-y divide-slate-100">
+                    @forelse($examInfo['roomSessions'] as $roomSession)
+                        <div class="px-4 py-3 text-sm">
+                            <div class="font-black text-slate-900">{{ $roomSession->nama_ruangan ?? '-' }}</div>
+                            <div class="mt-1 font-semibold text-slate-600">{{ $roomSession->nama_sesi ?? '-' }} /
+                                {{ $formatTime($roomSession->waktu_mulai) }}-{{ $formatTime($roomSession->waktu_selesai) }}
+                            </div>
+                            <div class="mt-2 text-xs font-black text-teal-700">
+                                {{ $roomSession->status_kehadiran ?? 'belum diisi' }}</div>
+                        </div>
+                    @empty
+                        <div class="px-4 py-8 text-center text-sm text-slate-500">Belum ada ruangan/sesi aktif.</div>
+                    @endforelse
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200">
+                <div class="border-b border-slate-200 px-4 py-3">
+                    <h3 class="font-black text-slate-950">Jadwal & Kehadiran</h3>
+                </div>
+                <div class="divide-y divide-slate-100">
+                    @forelse($examInfo['attendance'] as $attendance)
+                        <div class="px-4 py-3 text-sm">
+                            <div class="text-xs font-black uppercase tracking-wide text-slate-400">
+                                {{ $formatDate($attendance->tanggal) }}</div>
+                            <div class="mt-1 font-black text-slate-900">{{ $attendance->judul ?? '-' }}</div>
+                            <div class="mt-1 font-semibold text-slate-600">{{ $attendance->nama_mapel ?? '-' }} /
+                                {{ $attendance->nama_ruangan ?? '-' }} / {{ $attendance->nama_sesi ?? '-' }}</div>
+                            <div class="mt-2 flex flex-wrap gap-2 text-xs font-black">
+                                <span class="rounded-full bg-slate-100 px-3 py-1 text-slate-700">Hadir:
+                                    {{ $attendance->status_kehadiran ?? 'belum diisi' }}</span>
+                                <span class="rounded-full bg-amber-50 px-3 py-1 text-amber-700">Enroll:
+                                    {{ $attendance->status_enrollment ?? '-' }}</span>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="px-4 py-8 text-center text-sm text-slate-500">Belum ada jadwal aktif untuk siswa ini.
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200">
+                <div class="border-b border-slate-200 px-4 py-3">
+                    <h3 class="font-black text-slate-950">Hasil Ujian</h3>
+                </div>
+                <div class="divide-y divide-slate-100">
+                    @forelse($examInfo['results'] as $result)
+                        <div class="px-4 py-3 text-sm">
+                            <div class="text-xs font-black uppercase tracking-wide text-slate-400">
+                                {{ $formatDate($result->tanggal) }}</div>
+                            <div class="mt-1 font-black text-slate-900">{{ $result->judul ?? '-' }}</div>
+                            <div class="mt-1 font-semibold text-slate-600">{{ $result->nama_mapel ?? '-' }} /
+                                {{ $result->nama_ruangan ?? '-' }} / {{ $result->nama_sesi ?? '-' }}</div>
+                            <div class="mt-2 grid grid-cols-2 gap-2 text-xs font-black">
+                                <span class="rounded-xl bg-slate-100 px-3 py-2 text-slate-700">Nilai:
+                                    {{ $formatValue($result->nilai) }}</span>
+                                <span class="rounded-xl bg-slate-100 px-3 py-2 text-slate-700">Status:
+                                    {{ $result->status ?? '-' }}</span>
+                                <span class="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700">Benar:
+                                    {{ $formatValue($result->jumlah_benar) }}</span>
+                                <span class="rounded-xl bg-rose-50 px-3 py-2 text-rose-700">Salah:
+                                    {{ $formatValue($result->jumlah_salah) }}</span>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="px-4 py-8 text-center text-sm text-slate-500">Belum ada hasil ujian aktif.</div>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+    </section>
 
     <div class="mt-5 grid gap-5 lg:grid-cols-[1fr_.8fr]">
         <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
