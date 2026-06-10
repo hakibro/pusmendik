@@ -31,6 +31,13 @@
         ['label' => 'Info Ujian', 'href' => '#info-ujian-popup', 'icon' => 'M7 3v3m10-3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z'],
         ['label' => session('data_user') ? 'Setting' : 'Login', 'route' => session('data_user') ? 'settings.index' : 'login', 'icon' => 'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0-5v3m0 12v3m9-9h-3M6 12H3m15.36-6.36-2.12 2.12M7.76 16.24l-2.12 2.12m12.72 0-2.12-2.12M7.76 7.76 5.64 5.64'],
     ];
+    if (session('data_user')) {
+        array_splice($mobileNav, 3, 0, [[
+            'label' => 'Rekom',
+            'route' => 'students.index',
+            'icon' => 'M9 5h6M9 12h6m-6 4h3M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z',
+        ]]);
+    }
 @endphp
 
 <header class="sticky top-0 z-40 border-b border-white/70 bg-white/85 shadow-sm shadow-slate-200/50 backdrop-blur-xl">
@@ -141,7 +148,11 @@
 </div>
 
 <nav class="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-2 pb-2 pt-1 shadow-2xl shadow-slate-900/10 backdrop-blur-xl lg:hidden">
-    <div class="mx-auto grid max-w-md grid-cols-4 gap-1">
+    <div @class([
+        'mx-auto grid max-w-md gap-1',
+        'grid-cols-5' => count($mobileNav) === 5,
+        'grid-cols-4' => count($mobileNav) === 4,
+    ])>
         @foreach($mobileNav as $item)
             <a href="{{ $item['href'] ?? route($item['route']) }}" @class([
                 'flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-bold leading-tight transition',
