@@ -590,21 +590,35 @@ class PusmendikController extends Controller
         $guides = collect($payload['guides'] ?? [])
             ->filter(fn($guide) => is_array($guide))
             ->values();
+        $studentGuides = $guides->where('role', 'siswa')->values();
+        $committeeGuides = $guides->reject(fn($guide) => ($guide['role'] ?? '') === 'siswa')->values();
+        $selectedGroup = $request->query('group') === 'panitia' ? 'panitia' : 'siswa';
         $selectedRole = (string) $request->query('role', '');
 
-        if ($selectedRole !== '' && $guides->contains(fn($guide) => ($guide['role'] ?? '') === $selectedRole)) {
-            $displayGuides = $guides->where('role', $selectedRole)->values();
+        if ($selectedGroup === 'siswa' && $studentGuides->isEmpty() && $committeeGuides->isNotEmpty()) {
+            $selectedGroup = 'panitia';
+        }
+
+        if ($selectedGroup === 'panitia') {
+            $committeeRoles = $committeeGuides->pluck('role')->filter()->values();
+            $selectedRole = $committeeRoles->contains($selectedRole) ? $selectedRole : (string) ($committeeRoles->first() ?? '');
+            $displayGuides = $selectedRole !== ''
+                ? $committeeGuides->where('role', $selectedRole)->values()
+                : $committeeGuides;
         } else {
-            $selectedRole = '';
-            $displayGuides = $guides;
+            $selectedRole = 'siswa';
+            $displayGuides = $studentGuides;
         }
 
         return view('guides.index', [
             'guides' => $displayGuides,
-            'roles' => $guides->map(fn($guide) => [
+            'committeeRoles' => $committeeGuides->map(fn($guide) => [
                 'role' => $guide['role'] ?? '',
                 'title' => $guide['title'] ?? ucfirst((string) ($guide['role'] ?? 'Panduan')),
             ])->filter(fn($guide) => $guide['role'] !== '')->values(),
+            'hasStudentGuide' => $studentGuides->isNotEmpty(),
+            'hasCommitteeGuide' => $committeeGuides->isNotEmpty(),
+            'selectedGroup' => $selectedGroup,
             'selectedRole' => $selectedRole,
             'meta' => [
                 'updated_at' => $payload['updated_at'] ?? null,

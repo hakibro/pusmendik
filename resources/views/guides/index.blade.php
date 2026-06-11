@@ -27,21 +27,33 @@
 
 <div class="mb-5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm">
     <div class="flex gap-2 overflow-x-auto pb-1">
-        <a href="{{ route('guides.index') }}"
+        <a href="{{ route('guides.index', ['group' => 'siswa']) }}"
             @class([
-                'shrink-0 rounded-2xl px-3 py-2 text-xs font-black ring-1 ring-slate-200',
-                'bg-teal-600 text-white ring-teal-600' => $selectedRole === '',
-                'bg-white text-slate-700' => $selectedRole !== '',
-            ])>Semua</a>
-        @foreach($roles as $role)
-            <a href="{{ route('guides.index', ['role' => $role['role']]) }}"
-                @class([
-                    'shrink-0 rounded-2xl px-3 py-2 text-xs font-black ring-1 ring-slate-200',
-                    'bg-teal-600 text-white ring-teal-600' => $selectedRole === $role['role'],
-                    'bg-white text-slate-700' => $selectedRole !== $role['role'],
-                ])>{{ $role['title'] }}</a>
-        @endforeach
+                'shrink-0 rounded-2xl px-4 py-2 text-sm font-black ring-1 ring-slate-200',
+                'bg-teal-600 text-white ring-teal-600' => $selectedGroup === 'siswa',
+                'bg-white text-slate-700' => $selectedGroup !== 'siswa',
+                'opacity-50' => ! $hasStudentGuide,
+            ])>Siswa</a>
+        <a href="{{ route('guides.index', ['group' => 'panitia']) }}"
+            @class([
+                'shrink-0 rounded-2xl px-4 py-2 text-sm font-black ring-1 ring-slate-200',
+                'bg-teal-600 text-white ring-teal-600' => $selectedGroup === 'panitia',
+                'bg-white text-slate-700' => $selectedGroup !== 'panitia',
+                'opacity-50' => ! $hasCommitteeGuide,
+            ])>Panitia</a>
     </div>
+    @if($selectedGroup === 'panitia' && $committeeRoles->isNotEmpty())
+        <div class="mt-2 flex gap-2 overflow-x-auto border-t border-slate-100 pt-2">
+            @foreach($committeeRoles as $role)
+                <a href="{{ route('guides.index', ['group' => 'panitia', 'role' => $role['role']]) }}"
+                    @class([
+                        'shrink-0 rounded-xl px-3 py-2 text-xs font-black ring-1 ring-slate-200',
+                        'bg-slate-950 text-white ring-slate-950' => $selectedRole === $role['role'],
+                        'bg-white text-slate-700' => $selectedRole !== $role['role'],
+                    ])>{{ $role['title'] }}</a>
+            @endforeach
+        </div>
+    @endif
 </div>
 
 <div class="grid gap-5">
