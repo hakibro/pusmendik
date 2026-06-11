@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class PusmendikController extends Controller
 {
@@ -586,12 +589,13 @@ class PusmendikController extends Controller
 
     public function guides(Request $request)
     {
-        $payload = $this->guidePayload();
-        $guides = collect($payload['guides'] ?? [])
-            ->filter(fn($guide) => is_array($guide))
-            ->values();
-        $studentGuides = $guides->where('role', 'siswa')->values();
-        $committeeGuides = $guides->reject(fn($guide) => ($guide['role'] ?? '') === 'siswa')->values();
+        $guides = DB::table('guides')
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('title')
+            ->get();
+        $studentGuides = $guides->where('group', 'siswa')->values();
+        $committeeGuides = $guides->where('group', 'panitia')->values();
         $selectedGroup = $request->query('group') === 'panitia' ? 'panitia' : 'siswa';
         $selectedRole = (string) $request->query('role', '');
 
@@ -600,33 +604,303 @@ class PusmendikController extends Controller
         }
 
         if ($selectedGroup === 'panitia') {
-            $committeeRoles = $committeeGuides->pluck('role')->filter()->values();
+            $committeeRoles = $committeeGuides->pluck('slug')->filter()->values();
             $selectedRole = $committeeRoles->contains($selectedRole) ? $selectedRole : (string) ($committeeRoles->first() ?? '');
             $displayGuides = $selectedRole !== ''
-                ? $committeeGuides->where('role', $selectedRole)->values()
+                ? $committeeGuides->where('slug', $selectedRole)->values()
                 : $committeeGuides;
         } else {
             $selectedRole = 'siswa';
             $displayGuides = $studentGuides;
         }
 
+        $attachments = DB::table('guide_attachments')
+            ->whereIn('guide_id', $displayGuides->pluck('id'))
+            ->orderBy('title')
+            ->get()
+            ->groupBy('guide_id');
+
         return view('guides.index', [
-            'guides' => $displayGuides,
+            'guides' => $displayGuides->map(function ($guide) use ($attachments) {
+                $rendered = $this->renderGuideMarkdown((string) $guide->content_md);
+
+                return (object) [
+                    ...get_object_vars($guide),
+                    'content_html' => $rendered['html'],
+                    'toc' => $rendered['toc'],
+                    'attachments' => $attachments->get($guide->id, collect())->map(function ($attachment) {
+                        $attachment->url = $this->publicStorageUrl($attachment->file_path);
+                        $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
+
+                        return $attachment;
+                    }),
+                ];
+            }),
             'committeeRoles' => $committeeGuides->map(fn($guide) => [
-                'role' => $guide['role'] ?? '',
-                'title' => $guide['title'] ?? ucfirst((string) ($guide['role'] ?? 'Panduan')),
-            ])->filter(fn($guide) => $guide['role'] !== '')->values(),
+                'role' => $guide->slug,
+                'title' => $guide->title,
+            ])->values(),
             'hasStudentGuide' => $studentGuides->isNotEmpty(),
             'hasCommitteeGuide' => $committeeGuides->isNotEmpty(),
             'selectedGroup' => $selectedGroup,
             'selectedRole' => $selectedRole,
             'meta' => [
-                'updated_at' => $payload['updated_at'] ?? null,
-                'app_version' => $payload['app_version'] ?? null,
-                'api_url' => $this->guideApiUrl(),
-                'error' => $payload['error'] ?? null,
+                'updated_at' => $guides->max('updated_at'),
+                'app_version' => null,
+                'error' => null,
             ],
         ]);
+    }
+
+    public function guideEditor(Request $request)
+    {
+        $guides = DB::table('guides')->orderBy('group')->orderBy('sort_order')->orderBy('title')->get();
+        $selectedGuide = $guides->firstWhere('id', (int) $request->query('guide')) ?? $guides->first();
+        $attachments = collect();
+
+        if ($selectedGuide) {
+            $attachments = DB::table('guide_attachments')
+                ->where('guide_id', $selectedGuide->id)
+                ->orderBy('title')
+                ->get()
+                ->map(function ($attachment) {
+                    $attachment->url = $this->publicStorageUrl($attachment->file_path);
+                    $attachment->markdown = '[' . $attachment->title . '](' . $attachment->url . ')';
+                    $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
+
+                    return $attachment;
+                });
+        }
+
+        return view('settings.guides.index', [
+            'guides' => $guides,
+            'selectedGuide' => $selectedGuide,
+            'attachments' => $attachments,
+            'renderedPreview' => $selectedGuide ? $this->renderGuideMarkdown((string) $selectedGuide->content_md)['html'] : '',
+            'suggestedContent' => $this->defaultGuideContent('Panduan Baru'),
+        ]);
+    }
+
+    public function storeGuide(Request $request)
+    {
+        $data = $request->validate($this->guideRules());
+
+        $id = DB::table('guides')->insertGetId([
+            ...$data,
+            'is_active' => $request->boolean('is_active'),
+            'content_md' => ($data['content_md'] ?? '') ?: $this->defaultGuideContent($data['title']),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return redirect()->route('settings.guides.index', ['guide' => $id])->with('success', 'Panduan berhasil ditambahkan.');
+    }
+
+    public function updateGuide(Request $request, int $guide)
+    {
+        $data = $request->validate($this->guideRules($guide));
+
+        DB::table('guides')->where('id', $guide)->update([
+            ...$data,
+            'is_active' => $request->boolean('is_active'),
+            'updated_at' => now(),
+        ]);
+
+        return redirect()->route('settings.guides.index', ['guide' => $guide])->with('success', 'Panduan berhasil diperbarui.');
+    }
+
+    public function deleteGuide(int $guide)
+    {
+        $attachments = DB::table('guide_attachments')->where('guide_id', $guide)->get();
+        foreach ($attachments as $attachment) {
+            Storage::disk('public')->delete($attachment->file_path);
+        }
+
+        DB::table('guides')->where('id', $guide)->delete();
+
+        return redirect()->route('settings.guides.index')->with('success', 'Panduan berhasil dihapus.');
+    }
+
+    public function uploadGuideImage(Request $request)
+    {
+        $data = $request->validate([
+            'image' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'alt' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $path = $data['image']->store('guides/images', 'public');
+        $url = $this->publicStorageUrl($path);
+        $alt = $data['alt'] ?: pathinfo($data['image']->getClientOriginalName(), PATHINFO_FILENAME);
+
+        return back()->with('success', 'Gambar berhasil diupload.')->with('uploaded_image_markdown', '![' . $alt . '](' . $url . ')');
+    }
+
+    public function previewGuideMarkdown(Request $request)
+    {
+        $data = $request->validate([
+            'content_md' => ['nullable', 'string'],
+        ]);
+
+        return response()->json($this->renderGuideMarkdown((string) ($data['content_md'] ?? '')));
+    }
+
+    public function storeGuideAttachment(Request $request, int $guide)
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:150'],
+            'attachment' => ['required', 'file', 'mimes:doc,docx,xls,xlsx,pdf', 'max:10240'],
+        ]);
+
+        abort_unless(DB::table('guides')->where('id', $guide)->exists(), 404);
+
+        $file = $data['attachment'];
+        $path = $file->store('guides/attachments', 'public');
+
+        DB::table('guide_attachments')->insert([
+            'guide_id' => $guide,
+            'title' => $data['title'],
+            'file_path' => $path,
+            'file_name' => $file->getClientOriginalName(),
+            'mime_type' => $file->getMimeType(),
+            'file_size' => $file->getSize() ?: 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return redirect()->route('settings.guides.index', ['guide' => $guide])->with('success', 'Lampiran berhasil ditambahkan.');
+    }
+
+    public function deleteGuideAttachment(int $attachment)
+    {
+        $item = DB::table('guide_attachments')->where('id', $attachment)->firstOrFail();
+        Storage::disk('public')->delete($item->file_path);
+        DB::table('guide_attachments')->where('id', $attachment)->delete();
+
+        return redirect()->route('settings.guides.index', ['guide' => $item->guide_id])->with('success', 'Lampiran berhasil dihapus.');
+    }
+
+    private function guideRules(?int $guideId = null): array
+    {
+        return [
+            'title' => ['required', 'string', 'max:150'],
+            'slug' => ['required', 'string', 'max:80', 'alpha_dash', Rule::unique('guides', 'slug')->ignore($guideId)],
+            'group' => ['required', Rule::in(['siswa', 'panitia'])],
+            'sort_order' => ['required', 'integer', 'min:0'],
+            'content_md' => ['nullable', 'string'],
+        ];
+    }
+
+    private function renderGuideMarkdown(string $markdown): array
+    {
+        $markdown = $this->normalizeGuideStorageUrls($markdown);
+        $toc = $this->guideTableOfContents($markdown);
+        $index = 0;
+        $html = Str::markdown($markdown, [
+            'html_input' => 'strip',
+            'allow_unsafe_links' => false,
+        ]);
+
+        $html = preg_replace_callback('/<h([23])>(.*?)<\/h\1>/s', function ($matches) use ($toc, &$index) {
+            $item = $toc[$index] ?? null;
+            $index++;
+
+            if (! $item) {
+                return $matches[0];
+            }
+
+            return '<h' . $matches[1] . ' id="' . e($item['id']) . '">' . $matches[2] . '</h' . $matches[1] . '>';
+        }, $html);
+
+        return ['html' => $html, 'toc' => $toc];
+    }
+
+    private function normalizeGuideStorageUrls(string $markdown): string
+    {
+        $publicUrl = rtrim((string) config('filesystems.disks.public.url'), '/');
+        $appUrl = rtrim((string) config('app.url'), '/');
+
+        foreach (array_filter([$publicUrl, $appUrl . '/storage', 'http://localhost/storage']) as $baseUrl) {
+            $markdown = str_replace($baseUrl . '/', '/storage/', $markdown);
+        }
+
+        return $markdown;
+    }
+
+    private function publicStorageUrl(string $path): string
+    {
+        return '/storage/' . ltrim(str_replace('\\', '/', $path), '/');
+    }
+
+    private function guideTableOfContents(string $markdown): array
+    {
+        preg_match_all('/^(#{2,3})\s+(.+)$/m', $markdown, $matches, PREG_SET_ORDER);
+        $used = [];
+
+        return collect($matches)->map(function ($match) use (&$used) {
+            $title = trim(preg_replace('/[`*_~\[\]\(\)#>]/', '', $match[2]));
+            $base = Str::slug($title) ?: 'bagian';
+            $slug = $base;
+            $counter = 2;
+
+            while (in_array($slug, $used, true)) {
+                $slug = $base . '-' . $counter;
+                $counter++;
+            }
+
+            $used[] = $slug;
+
+            return [
+                'id' => $slug,
+                'title' => $title,
+                'level' => strlen($match[1]),
+            ];
+        })->values()->all();
+    }
+
+    private function defaultGuideContent(string $title): string
+    {
+        return <<<MD
+# {$title}
+
+Tulis ringkasan singkat tentang tujuan panduan ini.
+
+## 1. Unduh Template
+
+Gunakan lampiran di bawah panduan ini, atau tautkan langsung:
+
+[Download Template Import](/storage/guides/attachments/template.xlsx)
+
+## 2. Isi Template
+
+| Kolom | Wajib | Keterangan |
+| --- | --- | --- |
+| contoh | Ya | Isi keterangan di sini |
+
+## 3. Import File
+
+![Halaman Import](/storage/guides/images/import.png)
+
+Langkah:
+1. Buka menu import.
+2. Pilih file.
+3. Klik tombol import.
+4. Periksa hasil validasi.
+
+> Catatan: jangan mengubah nama kolom template.
+MD;
+    }
+
+    private function formatFileSize(int $bytes): string
+    {
+        if ($bytes >= 1048576) {
+            return number_format($bytes / 1048576, 1, ',', '.') . ' MB';
+        }
+
+        if ($bytes >= 1024) {
+            return number_format($bytes / 1024, 1, ',', '.') . ' KB';
+        }
+
+        return $bytes . ' B';
     }
 
     public function settings()
@@ -640,7 +914,6 @@ class PusmendikController extends Controller
     {
         $data = $request->validate([
             'payment_api_base_url' => ['nullable', 'url'],
-            'exam_guides_api_url' => ['nullable', 'url'],
             'surat_logo' => ['nullable', 'string'],
             'surat_kop_baris_1' => ['nullable', 'string'],
             'surat_kop_baris_2' => ['nullable', 'string'],
@@ -943,28 +1216,6 @@ class PusmendikController extends Controller
             return Http::timeout(12)->acceptJson()->get($url)->json() ?? [];
         } catch (\Throwable $exception) {
             return ['error' => $exception->getMessage()];
-        }
-    }
-
-    private function guideApiUrl(): string
-    {
-        return $this->setting('exam_guides_api_url', env('EXAM_GUIDES_API_URL', 'http://skadaexam.test/api/guides'));
-    }
-
-    private function guidePayload(): array
-    {
-        try {
-            $response = Http::timeout(12)->acceptJson()->get($this->guideApiUrl());
-
-            if (! $response->successful()) {
-                return ['guides' => [], 'error' => 'API panduan mengembalikan status ' . $response->status() . '.'];
-            }
-
-            $payload = $response->json();
-
-            return is_array($payload) ? $payload : ['guides' => [], 'error' => 'Format API panduan tidak valid.'];
-        } catch (\Throwable $exception) {
-            return ['guides' => [], 'error' => $exception->getMessage()];
         }
     }
 

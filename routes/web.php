@@ -28,4 +28,12 @@ Route::middleware('data.user')->group(function () {
     Route::get('/siswa/{id}/rekomendasi/cetak', [PusmendikController::class, 'printRecommendation'])->name('students.print');
     Route::get('/settings', [PusmendikController::class, 'settings'])->name('settings.index');
     Route::post('/settings', [PusmendikController::class, 'saveSettings'])->name('settings.store');
+    Route::get('/settings/panduan', [PusmendikController::class, 'guideEditor'])->name('settings.guides.index');
+    Route::post('/settings/panduan', [PusmendikController::class, 'storeGuide'])->name('settings.guides.store');
+    Route::post('/settings/panduan/preview', [PusmendikController::class, 'previewGuideMarkdown'])->name('settings.guides.preview');
+    Route::put('/settings/panduan/{guide}', [PusmendikController::class, 'updateGuide'])->name('settings.guides.update')->whereNumber('guide');
+    Route::delete('/settings/panduan/{guide}', [PusmendikController::class, 'deleteGuide'])->name('settings.guides.delete')->whereNumber('guide');
+    Route::post('/settings/panduan/upload-image', [PusmendikController::class, 'uploadGuideImage'])->name('settings.guides.upload-image');
+    Route::post('/settings/panduan/{guide}/attachments', [PusmendikController::class, 'storeGuideAttachment'])->name('settings.guides.attachments.store')->whereNumber('guide');
+    Route::delete('/settings/panduan/attachments/{attachment}', [PusmendikController::class, 'deleteGuideAttachment'])->name('settings.guides.attachments.delete')->whereNumber('attachment');
 });

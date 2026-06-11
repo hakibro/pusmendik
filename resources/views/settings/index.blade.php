@@ -5,14 +5,20 @@
     <p class="text-sm font-bold uppercase tracking-[0.2em] text-teal-700">Konfigurasi</p>
     <h1 class="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Setting Aplikasi</h1>
 </div>
+<div class="mb-5 max-w-3xl rounded-3xl border border-teal-200 bg-teal-50 p-5 shadow-sm">
+    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div>
+            <h2 class="text-xl font-black text-slate-950">Editor Panduan</h2>
+            <p class="mt-1 text-sm leading-6 text-teal-800">Tulis panduan berbasis Markdown, upload screenshot, dan tambahkan lampiran dokumen impor.</p>
+        </div>
+        <a href="{{ route('settings.guides.index') }}" class="w-fit rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-sm shadow-teal-600/20 transition hover:bg-teal-700">Buka Editor</a>
+    </div>
+</div>
 <div class="max-w-3xl rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
     <form method="post" action="{{ route('settings.store') }}" class="grid gap-4">
         @csrf
         <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">Base URL API Pembayaran
             <input type="url" name="payment_api_base_url" value="{{ old('payment_api_base_url', $settings['payment_api_base_url'] ?? env('PAYMENT_API_BASE_URL')) }}" class="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
-        </label>
-        <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">URL API Panduan Ujian
-            <input type="url" name="exam_guides_api_url" value="{{ old('exam_guides_api_url', $settings['exam_guides_api_url'] ?? env('EXAM_GUIDES_API_URL', 'http://skadaexam.test/api/guides')) }}" class="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
         </label>
         <div class="mt-4 border-t border-slate-200 pt-5">
             <h2 class="text-xl font-black text-slate-950">Setting Surat Rekomendasi</h2>

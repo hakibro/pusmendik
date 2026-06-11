@@ -181,7 +181,7 @@ document.addEventListener('click', (event) => {
     if (popup.contains(event.target) || event.target.closest('a[href="#info-ujian-popup"]')) return;
     popup.classList.add('hidden');
 });
-document.querySelectorAll('form select').forEach((select) => {
+document.querySelectorAll('form select:not([data-no-auto-submit])').forEach((select) => {
     select.addEventListener('change', () => {
         const form = select.form;
         if (!form) return;

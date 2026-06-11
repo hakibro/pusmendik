@@ -9,3 +9,119 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+.guide-content {
+    color: #334155;
+    font-size: 0.95rem;
+    line-height: 1.75;
+}
+
+.guide-content > * + * {
+    margin-top: 1rem;
+}
+
+.guide-content h1,
+.guide-content h2,
+.guide-content h3 {
+    color: #020617;
+    font-weight: 900;
+    letter-spacing: 0;
+    line-height: 1.2;
+    scroll-margin-top: 6rem;
+}
+
+.guide-content h1 {
+    font-size: 2rem;
+}
+
+.guide-content h2 {
+    margin-top: 2rem;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 1.25rem;
+    font-size: 1.45rem;
+}
+
+.guide-content h3 {
+    margin-top: 1.5rem;
+    font-size: 1.15rem;
+}
+
+.guide-content a {
+    color: #0f766e;
+    font-weight: 800;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+}
+
+.guide-content ul,
+.guide-content ol {
+    padding-left: 1.35rem;
+}
+
+.guide-content ul {
+    list-style: disc;
+}
+
+.guide-content ol {
+    list-style: decimal;
+}
+
+.guide-content blockquote {
+    border-left: 4px solid #14b8a6;
+    border-radius: 0.75rem;
+    background: #f0fdfa;
+    padding: 0.8rem 1rem;
+    color: #0f766e;
+    font-weight: 700;
+}
+
+.guide-content table {
+    width: 100%;
+    overflow: hidden;
+    border-collapse: collapse;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+}
+
+.guide-content th,
+.guide-content td {
+    border: 1px solid #e2e8f0;
+    padding: 0.75rem;
+    text-align: left;
+}
+
+.guide-content th {
+    background: #f8fafc;
+    color: #0f172a;
+    font-weight: 900;
+}
+
+.guide-content img {
+    max-width: 100%;
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+}
+
+.guide-content code {
+    border-radius: 0.45rem;
+    background: #f1f5f9;
+    padding: 0.1rem 0.35rem;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.guide-content pre {
+    overflow-x: auto;
+    border-radius: 1rem;
+    background: #0f172a;
+    padding: 1rem;
+    color: #e2e8f0;
+}
+
+.guide-content pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+}
