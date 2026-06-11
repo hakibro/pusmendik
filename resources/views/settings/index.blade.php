@@ -11,6 +11,9 @@
         <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">Base URL API Pembayaran
             <input type="url" name="payment_api_base_url" value="{{ old('payment_api_base_url', $settings['payment_api_base_url'] ?? env('PAYMENT_API_BASE_URL')) }}" class="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
         </label>
+        <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">URL API Panduan Ujian
+            <input type="url" name="exam_guides_api_url" value="{{ old('exam_guides_api_url', $settings['exam_guides_api_url'] ?? env('EXAM_GUIDES_API_URL', 'http://skadaexam.test/api/guides')) }}" class="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
+        </label>
         <div class="mt-4 border-t border-slate-200 pt-5">
             <h2 class="text-xl font-black text-slate-950">Setting Surat Rekomendasi</h2>
             <p class="mt-1 text-sm text-slate-500">Dipakai untuk kop surat, isi surat, batas pembayaran, dan lokasi penanggalan.</p>

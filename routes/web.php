@@ -19,6 +19,7 @@ Route::get('/live-ujian', [PusmendikController::class, 'liveExam'])->name('live.
 Route::get('/kehadiran', [PusmendikController::class, 'attendance'])->name('attendance.index');
 Route::get('/hasil-ujian', [PusmendikController::class, 'examResults'])->name('results.index');
 Route::get('/hasil-ujian/download', [PusmendikController::class, 'downloadExamResults'])->name('results.download');
+Route::get('/panduan', [PusmendikController::class, 'guides'])->name('guides.index');
 
 Route::middleware('data.user')->group(function () {
     Route::get('/siswa', [PusmendikController::class, 'students'])->name('students.index');

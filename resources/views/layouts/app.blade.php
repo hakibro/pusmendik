@@ -11,6 +11,7 @@
     $publicNav = [
         ['label' => 'Beranda', 'route' => 'dashboard'],
         ['label' => 'Cek Pembayaran', 'route' => 'payments.status'],
+        ['label' => 'Panduan', 'route' => 'guides.index'],
     ];
     $examNav = [
         ['label' => 'Jadwal', 'route' => 'schedules.index'],
@@ -28,6 +29,7 @@
     $mobileNav = [
         ['label' => 'Beranda', 'route' => 'dashboard', 'icon' => 'M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-6H8v6H4a1 1 0 0 1-1-1V10.5Z'],
         ['label' => 'Cek Pembayaran', 'route' => 'payments.status', 'icon' => 'M4 7h16v10H4V7Zm0 3h16M7 15h4'],
+        ['label' => 'Panduan', 'route' => 'guides.index', 'icon' => 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z'],
         ['label' => 'Info Ujian', 'href' => '#info-ujian-popup', 'icon' => 'M7 3v3m10-3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z'],
         ['label' => session('data_user') ? 'Setting' : 'Login', 'route' => session('data_user') ? 'settings.index' : 'login', 'icon' => 'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0-5v3m0 12v3m9-9h-3M6 12H3m15.36-6.36-2.12 2.12M7.76 16.24l-2.12 2.12m12.72 0-2.12-2.12M7.76 7.76 5.64 5.64'],
     ];
@@ -150,6 +152,7 @@
 <nav class="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-2 pb-2 pt-1 shadow-2xl shadow-slate-900/10 backdrop-blur-xl lg:hidden">
     <div @class([
         'mx-auto grid max-w-md gap-1',
+        'grid-cols-6' => count($mobileNav) === 6,
         'grid-cols-5' => count($mobileNav) === 5,
         'grid-cols-4' => count($mobileNav) === 4,
     ])>

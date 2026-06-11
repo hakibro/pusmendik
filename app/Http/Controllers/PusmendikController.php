@@ -584,6 +584,37 @@ class PusmendikController extends Controller
         ]);
     }
 
+    public function guides(Request $request)
+    {
+        $payload = $this->guidePayload();
+        $guides = collect($payload['guides'] ?? [])
+            ->filter(fn($guide) => is_array($guide))
+            ->values();
+        $selectedRole = (string) $request->query('role', '');
+
+        if ($selectedRole !== '' && $guides->contains(fn($guide) => ($guide['role'] ?? '') === $selectedRole)) {
+            $displayGuides = $guides->where('role', $selectedRole)->values();
+        } else {
+            $selectedRole = '';
+            $displayGuides = $guides;
+        }
+
+        return view('guides.index', [
+            'guides' => $displayGuides,
+            'roles' => $guides->map(fn($guide) => [
+                'role' => $guide['role'] ?? '',
+                'title' => $guide['title'] ?? ucfirst((string) ($guide['role'] ?? 'Panduan')),
+            ])->filter(fn($guide) => $guide['role'] !== '')->values(),
+            'selectedRole' => $selectedRole,
+            'meta' => [
+                'updated_at' => $payload['updated_at'] ?? null,
+                'app_version' => $payload['app_version'] ?? null,
+                'api_url' => $this->guideApiUrl(),
+                'error' => $payload['error'] ?? null,
+            ],
+        ]);
+    }
+
     public function settings()
     {
         return view('settings.index', [
@@ -595,6 +626,7 @@ class PusmendikController extends Controller
     {
         $data = $request->validate([
             'payment_api_base_url' => ['nullable', 'url'],
+            'exam_guides_api_url' => ['nullable', 'url'],
             'surat_logo' => ['nullable', 'string'],
             'surat_kop_baris_1' => ['nullable', 'string'],
             'surat_kop_baris_2' => ['nullable', 'string'],
@@ -897,6 +929,28 @@ class PusmendikController extends Controller
             return Http::timeout(12)->acceptJson()->get($url)->json() ?? [];
         } catch (\Throwable $exception) {
             return ['error' => $exception->getMessage()];
+        }
+    }
+
+    private function guideApiUrl(): string
+    {
+        return $this->setting('exam_guides_api_url', env('EXAM_GUIDES_API_URL', 'http://skadaexam.test/api/guides'));
+    }
+
+    private function guidePayload(): array
+    {
+        try {
+            $response = Http::timeout(12)->acceptJson()->get($this->guideApiUrl());
+
+            if (! $response->successful()) {
+                return ['guides' => [], 'error' => 'API panduan mengembalikan status ' . $response->status() . '.'];
+            }
+
+            $payload = $response->json();
+
+            return is_array($payload) ? $payload : ['guides' => [], 'error' => 'Format API panduan tidak valid.'];
+        } catch (\Throwable $exception) {
+            return ['guides' => [], 'error' => $exception->getMessage()];
         }
     }
 
