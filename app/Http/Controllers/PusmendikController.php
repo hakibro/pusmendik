@@ -594,61 +594,82 @@ class PusmendikController extends Controller
             ->orderBy('sort_order')
             ->orderBy('title')
             ->get();
-        $studentGuides = $guides->where('group', 'siswa')->values();
-        $committeeGuides = $guides->where('group', 'panitia')->values();
-        $selectedGroup = $request->query('group') === 'panitia' ? 'panitia' : 'siswa';
-        $selectedRole = (string) $request->query('role', '');
 
-        if ($selectedGroup === 'siswa' && $studentGuides->isEmpty() && $committeeGuides->isNotEmpty()) {
-            $selectedGroup = 'panitia';
-        }
-
-        if ($selectedGroup === 'panitia') {
-            $committeeRoles = $committeeGuides->pluck('slug')->filter()->values();
-            $selectedRole = $committeeRoles->contains($selectedRole) ? $selectedRole : (string) ($committeeRoles->first() ?? '');
-            $displayGuides = $selectedRole !== ''
-                ? $committeeGuides->where('slug', $selectedRole)->values()
-                : $committeeGuides;
-        } else {
-            $selectedRole = 'siswa';
-            $displayGuides = $studentGuides;
-        }
+        $selectedGuideId = (int) $request->query('guide', 0);
 
         $attachments = DB::table('guide_attachments')
-            ->whereIn('guide_id', $displayGuides->pluck('id'))
+            ->whereIn('guide_id', $guides->pluck('id'))
             ->orderBy('title')
             ->get()
             ->groupBy('guide_id');
 
+        $allGuidesWithToc = $guides->map(function ($guide) use ($attachments) {
+            $rendered = $this->renderGuideMarkdown((string) $guide->content_md);
+
+            return (object) [
+                ...get_object_vars($guide),
+                'content_html' => $rendered['html'],
+                'toc' => $rendered['toc'],
+                'attachments' => $attachments->get($guide->id, collect())->map(function ($attachment) {
+                    $attachment->url = $this->publicStorageUrl($attachment->file_path);
+                    $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
+                    return $attachment;
+                }),
+            ];
+        });
+
+        $studentGuides = $allGuidesWithToc->where('group', 'siswa')->values();
+        $committeeGuides = $allGuidesWithToc->where('group', 'panitia')->values();
+
+        if ($selectedGuideId === 0) {
+            $selectedGuideId = ($studentGuides->first() ?? $committeeGuides->first())->id ?? 0;
+        }
+
+        $selectedGuide = $allGuidesWithToc->firstWhere('id', $selectedGuideId);
+
         return view('guides.index', [
-            'guides' => $displayGuides->map(function ($guide) use ($attachments) {
-                $rendered = $this->renderGuideMarkdown((string) $guide->content_md);
-
-                return (object) [
-                    ...get_object_vars($guide),
-                    'content_html' => $rendered['html'],
-                    'toc' => $rendered['toc'],
-                    'attachments' => $attachments->get($guide->id, collect())->map(function ($attachment) {
-                        $attachment->url = $this->publicStorageUrl($attachment->file_path);
-                        $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
-
-                        return $attachment;
-                    }),
-                ];
-            }),
-            'committeeRoles' => $committeeGuides->map(fn($guide) => [
-                'role' => $guide->slug,
-                'title' => $guide->title,
-            ])->values(),
-            'hasStudentGuide' => $studentGuides->isNotEmpty(),
-            'hasCommitteeGuide' => $committeeGuides->isNotEmpty(),
-            'selectedGroup' => $selectedGroup,
-            'selectedRole' => $selectedRole,
+            'studentGuides' => $studentGuides,
+            'committeeGuides' => $committeeGuides,
+            'selectedGuide' => $selectedGuide,
+            'selectedGuideId' => $selectedGuideId,
             'meta' => [
                 'updated_at' => $guides->max('updated_at'),
                 'app_version' => null,
                 'error' => null,
             ],
+        ]);
+    }
+
+    public function getGuideAjax(int $guide)
+    {
+        $guideData = DB::table('guides')
+            ->where('id', $guide)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$guideData) {
+            return response()->json(['error' => 'Panduan tidak ditemukan'], 404);
+        }
+
+        $attachments = DB::table('guide_attachments')
+            ->where('guide_id', $guide)
+            ->orderBy('title')
+            ->get()
+            ->map(function ($attachment) {
+                $attachment->url = $this->publicStorageUrl($attachment->file_path);
+                $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
+                return $attachment;
+            });
+
+        $rendered = $this->renderGuideMarkdown((string) $guideData->content_md);
+
+        return response()->json([
+            'id' => $guideData->id,
+            'title' => $guideData->title,
+            'group' => $guideData->group,
+            'content_html' => $rendered['html'],
+            'toc' => $rendered['toc'],
+            'attachments' => $attachments,
         ]);
     }
 
@@ -735,6 +756,26 @@ class PusmendikController extends Controller
         return back()->with('success', 'Gambar berhasil diupload.')->with('uploaded_image_markdown', '![' . $alt . '](' . $url . ')');
     }
 
+    public function uploadGuideImageAjax(Request $request)
+    {
+        $data = $request->validate([
+            'image' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'alt' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $path = $data['image']->store('guides/images', 'public');
+        $url = $this->publicStorageUrl($path);
+        $alt = $data['alt'] ?: pathinfo($data['image']->getClientOriginalName(), PATHINFO_FILENAME);
+        $markdown = '![' . $alt . '](' . $url . ')';
+
+        return response()->json([
+            'success' => true,
+            'markdown' => $markdown,
+            'url' => $url,
+            'alt' => $alt,
+        ]);
+    }
+
     public function previewGuideMarkdown(Request $request)
     {
         $data = $request->validate([
@@ -804,7 +845,7 @@ class PusmendikController extends Controller
             $item = $toc[$index] ?? null;
             $index++;
 
-            if (! $item) {
+            if (!$item) {
                 return $matches[0];
             }
 

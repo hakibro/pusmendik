@@ -58,7 +58,7 @@
             <div class="text-sm font-black uppercase tracking-wide text-orange-500">Panduan</div>
             <h2 class="mt-2 text-xl font-black text-slate-950">Panduan penggunaan sistem</h2>
             <p class="mt-2 text-sm leading-6 text-slate-500">Tersedia panduan lengkap, tutorial, dan bantuan teknis bagi
-                siswa, wali, maupun petugas ujian.</p>
+                siswa, maupun petugas ujian.</p>
         </article>
         <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div class="text-sm font-black uppercase tracking-wide text-sky-700">Pelaksanaan</div>

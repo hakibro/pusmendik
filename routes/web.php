@@ -20,6 +20,7 @@ Route::get('/kehadiran', [PusmendikController::class, 'attendance'])->name('atte
 Route::get('/hasil-ujian', [PusmendikController::class, 'examResults'])->name('results.index');
 Route::get('/hasil-ujian/download', [PusmendikController::class, 'downloadExamResults'])->name('results.download');
 Route::get('/panduan', [PusmendikController::class, 'guides'])->name('guides.index');
+Route::get('/panduan/{guide}/ajax', [PusmendikController::class, 'getGuideAjax'])->name('guides.ajax')->whereNumber('guide');
 
 Route::middleware('data.user')->group(function () {
     Route::get('/siswa', [PusmendikController::class, 'students'])->name('students.index');
@@ -34,6 +35,7 @@ Route::middleware('data.user')->group(function () {
     Route::put('/settings/panduan/{guide}', [PusmendikController::class, 'updateGuide'])->name('settings.guides.update')->whereNumber('guide');
     Route::delete('/settings/panduan/{guide}', [PusmendikController::class, 'deleteGuide'])->name('settings.guides.delete')->whereNumber('guide');
     Route::post('/settings/panduan/upload-image', [PusmendikController::class, 'uploadGuideImage'])->name('settings.guides.upload-image');
+    Route::post('/settings/panduan/upload-image-ajax', [PusmendikController::class, 'uploadGuideImageAjax'])->name('settings.guides.upload-image-ajax');
     Route::post('/settings/panduan/{guide}/attachments', [PusmendikController::class, 'storeGuideAttachment'])->name('settings.guides.attachments.store')->whereNumber('guide');
     Route::delete('/settings/panduan/attachments/{attachment}', [PusmendikController::class, 'deleteGuideAttachment'])->name('settings.guides.attachments.delete')->whereNumber('attachment');
 });
