@@ -12,6 +12,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::get('/cek-pembayaran', [PusmendikController::class, 'paymentStatus'])->name('payments.status');
 Route::get('/ajax/siswa', [PusmendikController::class, 'studentSearch'])->name('students.search');
 Route::get('/ajax/rekom-siswa', [PusmendikController::class, 'rekomStudentSearch'])->name('students.rekom-search');
+Route::get('/ajax/ruangan-siswa', [PusmendikController::class, 'roomStudentSearch'])->name('rooms.students.search');
 Route::get('/jadwal-ujian', [PusmendikController::class, 'schedules'])->name('schedules.index');
 Route::get('/ruangan-sesi', [PusmendikController::class, 'rooms'])->name('rooms.index');
 Route::get('/pengawas', [PusmendikController::class, 'supervisors'])->name('supervisors.index');

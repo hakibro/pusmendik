@@ -362,18 +362,8 @@ class PusmendikController extends Controller
             ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
             ->select('siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'sr.nama_sesi', 'sr.waktu_mulai', 'sr.waktu_selesai', 'ruangan.nama_ruangan', 'srs.status_kehadiran')
             ->whereNull('siswa.deleted_at')
-            ->where('sr.sumber', 'sumber')
+            ->where('sr.sumber', 'sumber')->where('sr.paket_ujian_id', $activeExamPackageId)
             ->when($activeAcademicYearId, fn($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, function ($query) use ($activeAcademicYearId, $activeExamPackageId) {
-                $query->whereExists(function ($exists) use ($activeAcademicYearId, $activeExamPackageId) {
-                    $exists->select(DB::raw(1))
-                        ->from('jadwal_ujian_sesi_ruangan as jsr')
-                        ->join('jadwal_ujian as ju', 'ju.id', '=', 'jsr.jadwal_ujian_id')
-                        ->whereColumn('jsr.sesi_ruangan_id', 'sr.id')
-                        ->where('ju.paket_ujian_id', $activeExamPackageId)
-                        ->when($activeAcademicYearId, fn($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId));
-                });
-            })
             ->when($request->filled('q'), fn($q) => $q->where(fn($i) => $i->where('siswa.nama', 'like', '%' . $request->q . '%')->orWhere('siswa.idyayasan', 'like', '%' . $request->q . '%')))
             ->when($request->filled('tingkat'), fn($q) => $q->where('kelas.tingkat', $request->tingkat))
             ->when($request->filled('kelas'), fn($q) => $q->where('kelas.nama_kelas', $request->kelas))
@@ -382,8 +372,7 @@ class PusmendikController extends Controller
             ->orderBy('ruangan.nama_ruangan')
             ->orderBy('sr.waktu_mulai')
             ->orderBy('siswa.nama')
-            ->paginate(30)
-            ->withQueryString();
+            ->get();
 
         return view('rooms.index', [
             'title' => 'Ruangan dan Sesi Siswa',
@@ -391,6 +380,76 @@ class PusmendikController extends Controller
             'filters' => ['q' => 'Nama / ID Yayasan', 'tingkat' => 'Tingkat', 'kelas' => 'Kelas', 'ruangan' => 'Ruangan', 'sesi' => 'Sesi'],
             'filterOptions' => $this->roomFilterOptions(),
         ]);
+    }
+
+    public function roomStudentSearch(Request $request)
+    {
+        $activeAcademicYearId = $this->activeAcademicYearId();
+        $activeExamPackageId = $this->activeExamPackageId($activeAcademicYearId);
+        $q = trim((string) $request->query('q', ''));
+
+        $query = $this->exam()->table('sesi_ruangan_siswa as srs')
+            ->join('siswa', 'siswa.id', '=', 'srs.siswa_id')
+            ->join('sesi_ruangan as sr', 'sr.id', '=', 'srs.sesi_ruangan_id')
+            ->leftJoin('siswa_tahun_ajaran as sta', function ($join) use ($activeAcademicYearId) {
+                $join->on('sta.siswa_id', '=', 'siswa.id');
+                if ($activeAcademicYearId) {
+                    $join->where('sta.tahun_ajaran_id', $activeAcademicYearId);
+                }
+            })
+            ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
+            ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
+            ->select('siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'sr.nama_sesi', 'sr.waktu_mulai', 'sr.waktu_selesai', 'ruangan.nama_ruangan', 'srs.status_kehadiran')
+            ->whereNull('siswa.deleted_at')
+            ->where('sr.sumber', 'sumber')
+            ->when($activeAcademicYearId, fn($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId));
+
+        if (mb_strlen($q) >= 2) {
+            $query->where(fn($inner) => $inner
+                ->where('siswa.nama', 'like', "%{$q}%")
+                ->orWhere('siswa.idyayasan', 'like', "%{$q}%")
+                ->orWhere('siswa.nis', 'like', "%{$q}%"));
+        }
+
+        if ($request->filled('ruangan')) {
+            $query->where('ruangan.nama_ruangan', $request->ruangan);
+        }
+
+        if ($request->filled('tingkat')) {
+            $query->where('kelas.tingkat', $request->tingkat);
+        }
+
+        if ($request->filled('kelas')) {
+            $query->where('kelas.nama_kelas', $request->kelas);
+        }
+
+        if ($request->filled('sesi')) {
+            $query->where('sr.nama_sesi', $request->sesi);
+        }
+
+        return response()->json(
+            $query
+                ->orderBy('ruangan.nama_ruangan')
+                ->orderBy('sr.waktu_mulai')
+                ->orderBy('siswa.nama')
+                ->limit(100)
+                ->get()
+                ->groupBy(fn($item) => ($item->nama_ruangan ?? '-') . '|' . ($item->nama_sesi ?? '-'))
+                ->map(fn($rows, $key) => [
+                    'key' => $key,
+                    'ruangan' => explode('|', $key)[0],
+                    'sesi' => explode('|', $key)[1],
+                    'waktu_mulai' => $rows->first()->waktu_mulai ?? '-',
+                    'waktu_selesai' => $rows->first()->waktu_selesai ?? '-',
+                    'count' => $rows->count(),
+                    'students' => $rows->map(fn($student) => [
+                        'nama' => $student->nama,
+                        'idyayasan' => $student->idyayasan,
+                        'nama_kelas' => $student->nama_kelas,
+                    ])->values(),
+                ])
+                ->values()
+        );
     }
 
     public function supervisors(Request $request)
@@ -1123,44 +1182,15 @@ MD;
     {
         $exam = $this->exam();
         $activeAcademicYearId = $this->activeAcademicYearId();
-        $activeExamPackageId = $this->activeExamPackageId($activeAcademicYearId);
 
         return [
-            'tahun_ajaran_id' => $exam->table('tahun_ajaran')->orderByDesc('is_active')->orderByDesc('id')->pluck('nama', 'id'),
-            'paket_ujian_id' => $exam->table('paket_ujian')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->orderByDesc('status')->orderByDesc('id')->pluck('nama', 'id'),
-            'tingkat' => $exam->table('kelas')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->whereNotNull('tingkat')->distinct()->orderBy('tingkat')->pluck('tingkat'),
-            'kelas' => $exam->table('kelas')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->distinct()->orderBy('nama_kelas')->pluck('nama_kelas'),
-            'ruangan' => $exam->table('ruangan')
-                ->when($activeExamPackageId, function ($query) use ($activeAcademicYearId, $activeExamPackageId) {
-                    $query->whereExists(function ($exists) use ($activeAcademicYearId, $activeExamPackageId) {
-                        $exists->select(DB::raw(1))
-                            ->from('sesi_ruangan as sr')
-                            ->join('jadwal_ujian_sesi_ruangan as jsr', 'jsr.sesi_ruangan_id', '=', 'sr.id')
-                            ->join('jadwal_ujian as ju', 'ju.id', '=', 'jsr.jadwal_ujian_id')
-                            ->whereColumn('sr.ruangan_id', 'ruangan.id')
-                            ->where('ju.paket_ujian_id', $activeExamPackageId)
-                            ->when($activeAcademicYearId, fn($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId));
-                    });
-                })
+            'ruangan' => $exam->table('sesi_ruangan as sr')
+                ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
+                ->where('sr.sumber', 'sumber')
+                ->when($activeAcademicYearId, fn($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId))
                 ->distinct()
-                ->orderBy('nama_ruangan')
-                ->pluck('nama_ruangan'),
-            'sesi' => $exam->table('sesi_ruangan')
-                ->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))
-                ->when($activeExamPackageId, function ($query) use ($activeAcademicYearId, $activeExamPackageId) {
-                    $query->whereExists(function ($exists) use ($activeAcademicYearId, $activeExamPackageId) {
-                        $exists->select(DB::raw(1))
-                            ->from('jadwal_ujian_sesi_ruangan as jsr')
-                            ->join('jadwal_ujian as ju', 'ju.id', '=', 'jsr.jadwal_ujian_id')
-                            ->whereColumn('jsr.sesi_ruangan_id', 'sesi_ruangan.id')
-                            ->where('ju.paket_ujian_id', $activeExamPackageId)
-                            ->when($activeAcademicYearId, fn($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId));
-                    });
-                })
-                ->where('sumber', 'sumber')
-                ->distinct()
-                ->orderBy('nama_sesi')
-                ->pluck('nama_sesi'),
+                ->orderBy('ruangan.nama_ruangan')
+                ->pluck('ruangan.nama_ruangan'),
         ];
     }
 
