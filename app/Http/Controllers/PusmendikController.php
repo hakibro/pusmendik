@@ -88,13 +88,21 @@ class PusmendikController extends Controller
                     ->orWhere('siswa.idyayasan', 'like', "%{$q}%")
                     ->orWhere('siswa.nis', 'like', "%{$q}%"));
             })
+            ->when($request->filled('tingkat'), fn($query) => $query->where('kelas.tingkat', $request->tingkat))
             ->when($request->filled('kelas'), fn($query) => $query->where('kelas.nama_kelas', $request->kelas))
             ->when($request->filled('status_pembayaran'), fn($query) => $query->where('sta.status_pembayaran', $request->status_pembayaran))
             ->when($request->filled('rekomendasi'), fn($query) => $query->where(DB::raw("COALESCE(sta.rekomendasi, 'tidak')"), $request->rekomendasi))
             ->when($request->filled('petugas'), fn($query) => $query->where('recommendation_handlers.handled_by_name', $request->petugas));
 
+        $perPage = $request->filled('per_page') && in_array($request->per_page, [10, 25, 50, 100]) ? $request->per_page : 25;
+
         return view('students.index', [
-            'students' => $query->orderBy('kelas.tingkat')->orderBy('kelas.nama_kelas')->orderBy('siswa.nama')->paginate(25)->withQueryString(),
+            'students' => $query->orderBy('kelas.tingkat')->orderBy('kelas.nama_kelas')->orderBy('siswa.nama')->paginate($perPage)->withQueryString(),
+            'tingkat' => $this->exam()->table('kelas')
+                ->when($this->activeAcademicYearId(), fn($query, $tahunAjaranId) => $query->where('tahun_ajaran_id', $tahunAjaranId))
+                ->distinct()
+                ->orderBy('tingkat')
+                ->pluck('tingkat'),
             'kelas' => $this->exam()->table('kelas')
                 ->when($this->activeAcademicYearId(), fn($query, $tahunAjaranId) => $query->where('tahun_ajaran_id', $tahunAjaranId))
                 ->orderBy('tingkat')
@@ -275,6 +283,10 @@ class PusmendikController extends Controller
                 ->where('siswa.nama', 'like', "%{$q}%")
                 ->orWhere('siswa.idyayasan', 'like', "%{$q}%")
                 ->orWhere('siswa.nis', 'like', "%{$q}%"));
+        }
+
+        if ($request->filled('tingkat')) {
+            $query->where('kelas.tingkat', $request->tingkat);
         }
 
         if ($request->filled('kelas')) {

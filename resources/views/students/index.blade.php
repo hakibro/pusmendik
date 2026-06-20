@@ -90,9 +90,8 @@
         @endforeach
     </section>
 
-    <form method="get" id="filter-form" onsubmit="return false"
-        class="mb-6 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+    <form method="get" id="filter-form" class="mb-6 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
             <label class="grid gap-1 text-xs font-black uppercase tracking-wide text-slate-500">Cari nama / ID / NIS
                 <div class="relative">
                     <input name="q" id="search-input" value="{{ request('q') }}" autocomplete="off"
@@ -101,6 +100,15 @@
                         <div class="size-4 animate-spin rounded-full border-2 border-slate-200 border-t-teal-600"></div>
                     </div>
                 </div>
+            </label>
+            <label class="grid gap-1 text-xs font-black uppercase tracking-wide text-slate-500">Tingkat
+                <select name="tingkat" id="filter-tingkat"
+                    class="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold normal-case tracking-normal text-slate-800 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
+                    <option value="">Semua</option>
+                    @foreach ($tingkat as $t)
+                        <option value="{{ $t }}" @selected(request('tingkat') == $t)>{{ $t }}</option>
+                    @endforeach
+                </select>
             </label>
             <label class="grid gap-1 text-xs font-black uppercase tracking-wide text-slate-500">Kelas
                 <select name="kelas" id="filter-kelas"
@@ -136,9 +144,18 @@
                     @endforeach
                 </select>
             </label>
+            <label class="grid gap-1 text-xs font-black uppercase tracking-wide text-slate-500">Tampilkan
+                <select name="per_page" id="filter-per-page"
+                    class="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold normal-case tracking-normal text-slate-800 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
+                    <option value="10" @selected(request('per_page') == 10)>10</option>
+                    <option value="25" @selected(request('per_page', 25) == 25)>25</option>
+                    <option value="50" @selected(request('per_page') == 50)>50</option>
+                    <option value="100" @selected(request('per_page') == 100)>100</option>
+                </select>
+            </label>
         </div>
         <div class="mt-3 flex flex-wrap gap-2 sm:mt-4">
-            <button type="button" id="filter-button"
+            <button type="submit"
                 class="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white shadow-sm shadow-teal-600/20 transition hover:bg-teal-700">Filter</button>
             <a class="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                 href="{{ route('students.index') }}">Reset</a>
@@ -151,13 +168,17 @@
             <table class="min-w-full divide-y divide-slate-200 text-sm">
                 <thead class="bg-slate-100/80">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">ID Yayasan
+                        <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">ID
+                            Yayasan
                         </th>
                         <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Nama</th>
-                        <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Kelas</th>
-                        <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Pembayaran
+                        <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Kelas
                         </th>
-                        <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Rekom</th>
+                        <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">
+                            Pembayaran
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Rekom
+                        </th>
                         <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Nominal
                             Rekom</th>
                         <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Petugas
@@ -305,11 +326,12 @@
             const spinner = document.getElementById('search-spinner');
             const tableBody = document.getElementById('table-body');
             const cardContainer = document.getElementById('card-container');
+            const filterTingkat = document.getElementById('filter-tingkat');
             const filterKelas = document.getElementById('filter-kelas');
             const filterStatus = document.getElementById('filter-status-pembayaran');
             const filterRekom = document.getElementById('filter-rekomendasi');
             const filterPetugas = document.getElementById('filter-petugas');
-            const filterButton = document.getElementById('filter-button');
+            const filterPerPage = document.getElementById('filter-per-page');
             let searchTimeout = null;
             let currentAbort = null;
 
@@ -317,10 +339,12 @@
                 const params = new URLSearchParams();
                 const q = searchInput.value.trim();
                 if (q.length >= 2) params.set('q', q);
+                if (filterTingkat.value) params.set('tingkat', filterTingkat.value);
                 if (filterKelas.value) params.set('kelas', filterKelas.value);
                 if (filterStatus.value) params.set('status_pembayaran', filterStatus.value);
                 if (filterRekom.value) params.set('rekomendasi', filterRekom.value);
                 if (filterPetugas.value) params.set('petugas', filterPetugas.value);
+                if (filterPerPage.value) params.set('per_page', filterPerPage.value);
                 return params;
             }
 
@@ -466,20 +490,6 @@
             searchInput?.addEventListener('input', function() {
                 if (searchTimeout) clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(fetchData, 300);
-            });
-
-            // Filter button triggers search
-            filterButton?.addEventListener('click', function() {
-                if (searchTimeout) clearTimeout(searchTimeout);
-                fetchData();
-            });
-
-            // Select/dropdown changes trigger search
-            [filterKelas, filterStatus, filterRekom, filterPetugas].forEach(function(el) {
-                el?.addEventListener('change', function() {
-                    if (searchTimeout) clearTimeout(searchTimeout);
-                    fetchData();
-                });
             });
 
             // Enter key on search input
