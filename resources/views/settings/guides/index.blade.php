@@ -202,6 +202,29 @@
                 </section>
 
                 <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                    <h2 class="text-xl font-black text-slate-950">Lampiran File Umum</h2>
+                    <p class="mt-1 text-sm text-slate-500">Semua format file diperbolehkan. Maksimal 500 MB.</p>
+                    <form method="post" action="{{ route('settings.guides.attachments.store', $selectedGuide->id) }}"
+                        enctype="multipart/form-data" class="mt-4 grid gap-3">
+                        @csrf
+                        <input type="hidden" name="attachment_type" value="general">
+                        <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">Judul
+                            Lampiran
+                            <input name="title" required placeholder="Video Tutorial"
+                                class="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold normal-case tracking-normal text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
+                        </label>
+                        <input type="file" name="general_file" required
+                            class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        <div class="text-xs font-semibold text-amber-600">
+                            ⚠️ Pastikan konfigurasi server mendukung upload file hingga 500 MB.
+                        </div>
+                        <button
+                            class="w-fit rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-700">Upload
+                            File</button>
+                    </form>
+                </section>
+
+                <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                     <div class="mb-4 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                         <div>
                             <h2 class="text-xl font-black text-slate-950">Preview</h2>

@@ -858,14 +858,25 @@ class PusmendikController extends Controller
 
     public function storeGuideAttachment(Request $request, int $guide)
     {
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:150'],
-            'attachment' => ['required', 'file', 'mimes:doc,docx,xls,xlsx,pdf', 'max:10240'],
-        ]);
-
         abort_unless(DB::table('guides')->where('id', $guide)->exists(), 404);
 
-        $file = $data['attachment'];
+        $attachmentType = $request->input('attachment_type', 'document');
+
+        // Validation rules based on attachment type
+        if ($attachmentType === 'general') {
+            $data = $request->validate([
+                'title' => ['required', 'string', 'max:150'],
+                'general_file' => ['required', 'file', 'max:512000'], // 500 MB = 512000 KB
+            ]);
+            $file = $data['general_file'];
+        } else {
+            $data = $request->validate([
+                'title' => ['required', 'string', 'max:150'],
+                'attachment' => ['required', 'file', 'mimes:doc,docx,xls,xlsx,pdf', 'max:10240'], // 10 MB
+            ]);
+            $file = $data['attachment'];
+        }
+
         $path = $file->store('guides/attachments', 'public');
 
         DB::table('guide_attachments')->insert([
