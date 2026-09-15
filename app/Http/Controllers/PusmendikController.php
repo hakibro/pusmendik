@@ -40,6 +40,43 @@ class PusmendikController extends Controller
             ->value('id');
     }
 
+    /**
+     * Konteks rekomendasi yang sedang berlaku: tahun ajaran aktif + paket ujian aktif.
+     * Rekomendasi disimpan dan dibaca per (siswa, tahun ajaran, paket ujian).
+     */
+    private function recommendationScope(): array
+    {
+        $tahunAjaranId = $this->activeAcademicYearId();
+
+        return [$tahunAjaranId, $this->activeExamPackageId($tahunAjaranId)];
+    }
+
+    /**
+     * Subquery handler terbaru, dibatasi pada (tahun ajaran, paket ujian) tertentu.
+     * Dipakai untuk join rekomendasi sesuai scope aktif.
+     */
+    private function latestHandlerSubquery($handlerTable, ?int $tahunAjaranId, ?int $paketUjianId)
+    {
+        return $this->exam()->table($handlerTable)
+            ->select('exam_siswa_id', DB::raw('MAX(id) as latest_id'))
+            ->when($tahunAjaranId, fn($query) => $query->where('tahun_ajaran_id', $tahunAjaranId))
+            ->when($paketUjianId, fn($query) => $query->where('paket_ujian_id', $paketUjianId))
+            ->groupBy('exam_siswa_id');
+    }
+
+    /**
+     * Handler terakhir untuk satu siswa, dalam scope TA + paket ujian aktif.
+     */
+    private function latestHandlerForStudent(int $studentId, ?int $tahunAjaranId, ?int $paketUjianId)
+    {
+        return DB::table('recommendation_handlers')
+            ->where('exam_siswa_id', $studentId)
+            ->when($tahunAjaranId, fn($query) => $query->where('tahun_ajaran_id', $tahunAjaranId))
+            ->when($paketUjianId, fn($query) => $query->where('paket_ujian_id', $paketUjianId))
+            ->orderByDesc('id')
+            ->first();
+    }
+
     public function dashboard()
     {
         $exam = $this->exam();
@@ -74,9 +111,8 @@ class PusmendikController extends Controller
         $localDatabase = DB::connection()->getDatabaseName();
         $handlerTable = DB::raw("`{$localDatabase}`.`recommendation_handlers`");
         $handlerJoinTable = DB::raw("`{$localDatabase}`.`recommendation_handlers` as recommendation_handlers");
-        $latestHandlers = $this->exam()->table($handlerTable)
-            ->select('exam_siswa_id', DB::raw('MAX(id) as latest_id'))
-            ->groupBy('exam_siswa_id');
+        [$scopeTa, $scopePaket] = $this->recommendationScope();
+        $latestHandlers = $this->latestHandlerSubquery($handlerTable, $scopeTa, $scopePaket);
 
         $query = $this->studentQuery(['recommendation_handlers.nominal_rekom', 'recommendation_handlers.handled_by_name'])
             ->leftJoinSub($latestHandlers, 'latest_handlers', fn($join) => $join->on('latest_handlers.exam_siswa_id', '=', 'siswa.id'))
@@ -110,6 +146,8 @@ class PusmendikController extends Controller
                 ->pluck('nama_kelas'),
             'petugas' => DB::table('recommendation_handlers')
                 ->whereNotNull('handled_by_name')
+                ->when($scopeTa, fn($q) => $q->where('tahun_ajaran_id', $scopeTa))
+                ->when($scopePaket, fn($q) => $q->where('paket_ujian_id', $scopePaket))
                 ->distinct()
                 ->orderBy('handled_by_name')
                 ->pluck('handled_by_name'),
@@ -130,7 +168,7 @@ class PusmendikController extends Controller
             'payments' => $payments,
             'paymentView' => $this->paymentViewModel($summary, $payments),
             'examInfo' => $this->studentExamInfo($student->id),
-            'handler' => DB::table('recommendation_handlers')->where('exam_siswa_id', $id)->latest()->first(),
+            'handler' => $this->latestHandlerForStudent($id, ...$this->recommendationScope()),
         ]);
     }
 
@@ -146,8 +184,14 @@ class PusmendikController extends Controller
         $tunggakan = $this->payment($student->idyayasan, false);
         $catatanRekomendasi = 'wali membayar Rp. ' . number_format((float) $data['nominal_rekom'], 0, ',', '.');
 
+        // Rekomendasi melekat pada tahun ajaran + paket ujian yang aktif saat disimpan.
+        $tahunAjaranId = $student->tahun_ajaran_id ?: $this->activeAcademicYearId();
+        $paketUjianId = $this->activeExamPackageId($tahunAjaranId);
+
         DB::table('recommendation_handlers')->insert([
             'exam_siswa_id' => $student->id,
+            'tahun_ajaran_id' => $tahunAjaranId,
+            'paket_ujian_id' => $paketUjianId,
             'idyayasan' => $student->idyayasan,
             'nama' => $student->nama,
             'nominal_rekom' => $data['nominal_rekom'],
@@ -177,7 +221,7 @@ class PusmendikController extends Controller
     public function printRecommendation(int $id)
     {
         $student = $this->studentQuery()->where('siswa.id', $id)->firstOrFail();
-        $handler = DB::table('recommendation_handlers')->where('exam_siswa_id', $id)->latest()->first();
+        $handler = $this->latestHandlerForStudent($id, ...$this->recommendationScope());
         $storedTunggakan = $handler?->tunggakan ? json_decode($handler->tunggakan, true) : [];
         $summary = $this->payment($student->idyayasan, true);
         $payments = $storedTunggakan ?: $this->payment($student->idyayasan, false);
@@ -270,9 +314,8 @@ class PusmendikController extends Controller
         $localDatabase = DB::connection()->getDatabaseName();
         $handlerTable = DB::raw("`{$localDatabase}`.`recommendation_handlers`");
         $handlerJoinTable = DB::raw("`{$localDatabase}`.`recommendation_handlers` as recommendation_handlers");
-        $latestHandlers = $this->exam()->table($handlerTable)
-            ->select('exam_siswa_id', DB::raw('MAX(id) as latest_id'))
-            ->groupBy('exam_siswa_id');
+        [$scopeTa, $scopePaket] = $this->recommendationScope();
+        $latestHandlers = $this->latestHandlerSubquery($handlerTable, $scopeTa, $scopePaket);
 
         $query = $this->studentQuery(['recommendation_handlers.nominal_rekom', 'recommendation_handlers.handled_by_name'])
             ->leftJoinSub($latestHandlers, 'latest_handlers', fn($join) => $join->on('latest_handlers.exam_siswa_id', '=', 'siswa.id'))
