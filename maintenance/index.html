@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f766e">
+    <meta name="description" content="Kami sedang melakukan pembaruan kecil. Layanan Pusmendik akan kembali besok, lebih cepat dan lebih menyenangkan.">
+    <title>Sebentar Lagi Ya — Kami Hadir Besok</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --teal-50:  #f0fdfa;
+            --teal-100: #ccfbf1;
+            --teal-400: #2dd4bf;
+            --teal-500: #14b8a6;
+            --teal-600: #0d9488;
+            --teal-700: #0f766e;
+            --teal-900: #134e4a;
+            --amber-300:#fcd34d;
+            --amber-400:#fbbf24;
+            --amber-500:#f59e0b;
+            --ink:      #0f172a;
+            --slate-500:#64748b;
+            --slate-600:#475569;
+            --radius: 28px;
+            --shadow: 0 30px 60px -24px rgba(15, 118, 110, .35);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+        body {
+            min-height: 100dvh;
+            font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(1100px 620px at 12% -8%, var(--teal-100) 0%, transparent 55%),
+                radial-gradient(900px 520px at 100% 0%, #fef3c7 0%, transparent 50%),
+                radial-gradient(1000px 700px at 50% 120%, #ecfeff 0%, transparent 60%),
+                #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: clamp(1rem, 4vw, 3rem);
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* ---------- Decorative floating blobs ---------- */
+        .blob {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: .55;
+            z-index: 0;
+            pointer-events: none;
+            animation: float 14s ease-in-out infinite;
+        }
+        .blob--1 { width: 280px; height: 280px; background: var(--teal-400); top: -80px; left: -60px; }
+        .blob--2 { width: 240px; height: 240px; background: var(--amber-300); bottom: -70px; right: -50px; animation-delay: -4s; }
+        .blob--3 { width: 200px; height: 200px; background: #a5b4fc; top: 45%; right: 12%; animation-delay: -8s; }
+
+        @keyframes float {
+            0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+            50%      { transform: translate3d(0, -26px, 0) scale(1.08); }
+        }
+
+        /* ---------- Card ---------- */
+        .card {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 720px;
+            background: rgba(255, 255, 255, .82);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(255, 255, 255, .9);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: clamp(1.5rem, 5vw, 3.25rem);
+            text-align: center;
+            animation: rise .8s cubic-bezier(.2, .8, .2, 1) both;
+            overflow: hidden;
+        }
+        .card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 6px;
+            background: linear-gradient(90deg, var(--teal-500), var(--amber-400), var(--teal-500));
+            background-size: 200% 100%;
+            animation: shimmer 5s linear infinite;
+        }
+        @keyframes shimmer { to { background-position: 200% 0; } }
+
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(28px) scale(.98); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* ---------- Brand ---------- */
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: .6rem;
+            margin-bottom: clamp(1.1rem, 3vw, 1.6rem);
+        }
+        .brand__logo {
+            display: grid;
+            place-items: center;
+            width: 46px; height: 46px;
+            border-radius: 15px;
+            background: linear-gradient(135deg, var(--teal-600), var(--teal-500));
+            color: #fff;
+            font-weight: 800;
+            font-size: 1.35rem;
+            box-shadow: 0 12px 24px -10px var(--teal-600);
+        }
+        .brand__text { text-align: left; line-height: 1.1; }
+        .brand__name { font-weight: 800; font-size: 1.05rem; letter-spacing: -.01em; }
+        .brand__sub { font-size: .78rem; color: var(--slate-500); font-weight: 500; }
+
+        /* ---------- Icon ---------- */
+        .icon-wrap {
+            position: relative;
+            display: grid;
+            place-items: center;
+            width: clamp(110px, 26vw, 150px);
+            height: clamp(110px, 26vw, 150px);
+            margin: 0 auto clamp(1.1rem, 3vw, 1.6rem);
+        }
+        .icon-wrap::before {
+            content: "";
+            position: absolute;
+            inset: -12%;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, var(--teal-400), var(--teal-100), var(--teal-400));
+            opacity: .25;
+            animation: spin 9s linear infinite;
+        }
+        .icon-wrap::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: linear-gradient(160deg, #ffffff, var(--teal-50));
+            box-shadow: inset 0 2px 10px rgba(13, 148, 136, .12), 0 20px 40px -20px var(--teal-700);
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .icon { position: relative; z-index: 1; width: 52%; height: 52%; color: var(--teal-700); animation: wiggle 3.4s ease-in-out infinite; }
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(0deg); }
+            30%      { transform: rotate(-14deg); }
+            60%      { transform: rotate(10deg); }
+        }
+
+        /* ---------- Typography ---------- */
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            color: var(--teal-700);
+            background: var(--teal-50);
+            border: 1px solid var(--teal-100);
+            padding: .45rem .9rem;
+            border-radius: 999px;
+            margin-bottom: 1rem;
+        }
+        .dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--amber-400);
+            box-shadow: 0 0 0 0 rgba(251, 191, 36, .7);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(251, 191, 36, .65); }
+            70%  { box-shadow: 0 0 0 12px rgba(251, 191, 36, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+        }
+
+        h1 {
+            font-size: clamp(1.7rem, 6.2vw, 3rem);
+            font-weight: 800;
+            line-height: 1.12;
+            letter-spacing: -.025em;
+            margin-bottom: .9rem;
+        }
+        h1 .hl {
+            background: linear-gradient(120deg, var(--teal-600), var(--amber-500));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .lead {
+            color: var(--slate-600);
+            font-size: clamp(.98rem, 2.6vw, 1.12rem);
+            line-height: 1.72;
+            max-width: 46ch;
+            margin: 0 auto 1.9rem;
+        }
+
+        /* ---------- Countdown / "besok" chip ---------- */
+        .promise {
+            display: inline-flex;
+            align-items: center;
+            gap: .7rem;
+            background: linear-gradient(135deg, var(--teal-700), var(--teal-500));
+            color: #fff;
+            padding: .85rem 1.4rem;
+            border-radius: 999px;
+            font-weight: 800;
+            font-size: clamp(.9rem, 2.6vw, 1rem);
+            box-shadow: 0 18px 34px -18px var(--teal-700);
+            margin-bottom: 2rem;
+        }
+        .promise svg { width: 20px; height: 20px; flex-shrink: 0; }
+        .promise b { color: var(--amber-300); }
+
+        /* ---------- Cards grid ---------- */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: .8rem;
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+        @media (min-width: 560px) {
+            .grid { grid-template-columns: repeat(3, 1fr); }
+            .grid > .item { text-align: center; }
+            .grid > .item .item__icon { margin: 0 auto .6rem; }
+        }
+        .item {
+            display: flex;
+            align-items: center;
+            gap: .85rem;
+            background: rgba(255, 255, 255, .7);
+            border: 1px solid #e2e8f0;
+            border-radius: 18px;
+            padding: .95rem 1.1rem;
+            transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+        }
+        .item:hover {
+            transform: translateY(-4px);
+            border-color: var(--teal-100);
+            box-shadow: 0 18px 30px -20px var(--teal-600);
+        }
+        .item__icon { width: 26px; height: 26px; color: var(--teal-600); flex-shrink: 0; }
+        .item__title { font-weight: 800; font-size: .92rem; margin-bottom: .1rem; }
+        .item__desc { color: var(--slate-500); font-size: .8rem; line-height: 1.5; font-weight: 500; }
+
+        /* ---------- Footer note ---------- */
+        .foot {
+            font-size: .82rem;
+            color: var(--slate-500);
+            line-height: 1.6;
+            font-weight: 500;
+        }
+        .foot a { color: var(--teal-700); font-weight: 800; text-decoration: none; border-bottom: 2px solid var(--teal-100); }
+        .foot a:hover { border-color: var(--teal-500); }
+
+        .heart { color: #f43f5e; }
+
+        /* ---------- Progress bar ---------- */
+        .bar {
+            width: 100%;
+            height: 8px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            overflow: hidden;
+            margin: 1.6rem 0 .6rem;
+        }
+        .bar__fill {
+            height: 100%;
+            width: 88%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--teal-500), var(--amber-400));
+            background-size: 200% 100%;
+            animation: shimmer 2.6s linear infinite;
+        }
+        .bar__label { font-size: .74rem; font-weight: 700; color: var(--slate-500); letter-spacing: .04em; }
+
+        /* ---------- Bottom signature ---------- */
+        .sign {
+            position: relative;
+            z-index: 1;
+            margin-top: 1.6rem;
+            font-size: .78rem;
+            color: var(--slate-500);
+            font-weight: 600;
+            text-align: center;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="blob blob--1" aria-hidden="true"></div>
+    <div class="blob blob--2" aria-hidden="true"></div>
+    <div class="blob blob--3" aria-hidden="true"></div>
+
+    <main class="card" role="main">
+        <div class="brand">
+            <span class="brand__logo" aria-hidden="true">P</span>
+            <span class="brand__text">
+                <span class="brand__name">Pusmendik</span><br>
+                <span class="brand__sub">Pusat Informasi Ujian</span>
+            </span>
+        </div>
+
+        <div class="icon-wrap" aria-hidden="true">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-.5-.5-2.1 2.1-2.4Z"/>
+            </svg>
+        </div>
+
+        <span class="eyebrow"><span class="dot"></span> Sedang Dandan Sebentar</span>
+
+        <h1>Terima kasih sudah <span class="hl">mampir!</span><br>Kami hadir kembali <span class="hl">besok</span> ✨</h1>
+
+        <p class="lead">
+            Kami sedang memoles beberapa hal supaya pengalamanmu makin lancar,
+            makin cepat, dan tentu lebih menyenangkan. Tarik napas dulu, seduh kopi,
+            lalu <strong>balik lagi besok</strong> — kami sudah siap menyambutmu. 💛
+        </p>
+
+        <div class="promise">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>
+            Layanan kembali online <b>&nbsp;besok pagi</b>
+        </div>
+
+        <section class="grid" aria-label="Yang sedang kami siapkan">
+            <div class="item">
+                <svg class="item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>
+                <div>
+                    <div class="item__title">Lebih Ngebut</div>
+                    <div class="item__desc">Halaman terbuka secepat kilat.</div>
+                </div>
+            </div>
+            <div class="item">
+                <svg class="item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5L12 3Z"/></svg>
+                <div>
+                    <div class="item__title">Lebih Segar</div>
+                    <div class="item__desc">Tampilan baru yang ramah dipandang.</div>
+                </div>
+            </div>
+            <div class="item">
+                <svg class="item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 12 2 2 4-4M12 3l7 4v5c0 5-3 8-7 9-4-1-7-4-7-9V7l7-4Z"/></svg>
+                <div>
+                    <div class="item__title">Lebih Aman</div>
+                    <div class="item__desc">Data kamu kami jaga baik-baik.</div>
+                </div>
+            </div>
+        </section>
+
+        <div class="bar" role="progressbar" aria-valuenow="88" aria-valuemin="0" aria-valuemax="100" aria-label="Progres pemeliharaan">
+            <div class="bar__fill"></div>
+        </div>
+        <p class="bar__label">PROGRES PEMELIHARAAN &middot; HAMPIR SELESAI</p>
+
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:1.8rem 0 1.2rem;">
+
+        <p class="foot">
+            Ada yang perlu segera diselesaikan? <a href="mailto:info@pusmendik.id">Kirim pesan ke tim kami</a> —
+            kami tetap membalas dengan senyum. Dibuat dengan <span class="heart">♥</span> untuk kamu.
+        </p>
+    </main>
+
+    <p class="sign">© <span id="year">2026</span> Pusmendik &middot; Sampai jumpa besok, ya! 👋</p>
+
+    <script>
+        document.getElementById('year').textContent = new Date().getFullYear();
+    </script>
+</body>
+</html>
