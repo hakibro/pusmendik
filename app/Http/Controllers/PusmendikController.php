@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\PembayaranViewService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -17,6 +18,29 @@ class PusmendikController extends Controller
         return DB::connection('exam');
     }
 
+    /**
+     * Definisi tunggal status administrasi ujian: siswa "Lunas" bila tidak ada pos
+     * wajib ujian yang belum terpenuhi (gerbang apiakademik). Dipakai agar kolom
+     * status di daftar/rekom/dashboard/kartu siswa konsisten dengan "Sisa Tunggakan
+     * Ujian", bukan bergantung pada kolom `status_pembayaran` yang bisa basi.
+     */
+    private function statusAdministrasi(?string $idyayasan, ?string $fallbackDb = null): ?string
+    {
+        if ($idyayasan === null || $idyayasan === '') {
+            return $fallbackDb;
+        }
+
+        try {
+            $map = $this->pembayaranService()->statusUjianMap();
+            $status = $this->pembayaranService()->statusUjianSiswa($idyayasan, $map, $fallbackDb);
+
+            return $status['status'] ?? $fallbackDb;
+        } catch (\Throwable $exception) {
+            // Jangan sampai API yang mati mematahkan halaman; pakai nilai DB apa adanya.
+            return $fallbackDb;
+        }
+    }
+
     private function setting(string $key, ?string $default = null): ?string
     {
         return DB::table('app_settings')->where('key', $key)->value('value') ?? $default;
@@ -25,7 +49,7 @@ class PusmendikController extends Controller
     private function activeAcademicYearId(): ?int
     {
         return $this->exam()->table('tahun_ajaran')
-            ->where(fn($query) => $query->where('is_active', 1)->orWhere('status', 'aktif'))
+            ->where(fn ($query) => $query->where('is_active', 1)->orWhere('status', 'aktif'))
             ->orderByDesc('is_active')
             ->orderByDesc('id')
             ->value('id');
@@ -34,7 +58,7 @@ class PusmendikController extends Controller
     private function activeExamPackageId(?int $tahunAjaranId = null): ?int
     {
         return $this->exam()->table('paket_ujian')
-            ->when($tahunAjaranId, fn($query) => $query->where('tahun_ajaran_id', $tahunAjaranId))
+            ->when($tahunAjaranId, fn ($query) => $query->where('tahun_ajaran_id', $tahunAjaranId))
             ->where('status', 'aktif')
             ->orderByDesc('id')
             ->value('id');
@@ -59,8 +83,8 @@ class PusmendikController extends Controller
     {
         return $this->exam()->table($handlerTable)
             ->select('exam_siswa_id', DB::raw('MAX(id) as latest_id'))
-            ->when($tahunAjaranId, fn($query) => $query->where('tahun_ajaran_id', $tahunAjaranId))
-            ->when($paketUjianId, fn($query) => $query->where('paket_ujian_id', $paketUjianId))
+            ->when($tahunAjaranId, fn ($query) => $query->where('tahun_ajaran_id', $tahunAjaranId))
+            ->when($paketUjianId, fn ($query) => $query->where('paket_ujian_id', $paketUjianId))
             ->groupBy('exam_siswa_id');
     }
 
@@ -71,8 +95,8 @@ class PusmendikController extends Controller
     {
         return DB::table('recommendation_handlers')
             ->where('exam_siswa_id', $studentId)
-            ->when($tahunAjaranId, fn($query) => $query->where('tahun_ajaran_id', $tahunAjaranId))
-            ->when($paketUjianId, fn($query) => $query->where('paket_ujian_id', $paketUjianId))
+            ->when($tahunAjaranId, fn ($query) => $query->where('tahun_ajaran_id', $tahunAjaranId))
+            ->when($paketUjianId, fn ($query) => $query->where('paket_ujian_id', $paketUjianId))
             ->orderByDesc('id')
             ->first();
     }
@@ -90,16 +114,16 @@ class PusmendikController extends Controller
                 'lunas' => (clone $students)->where('sta.status_pembayaran', 'Lunas')->count(),
                 'rekom' => (clone $students)->where('sta.rekomendasi', 'ya')->count(),
                 'jadwal' => $exam->table('jadwal_ujian')
-                    ->when($activeAcademicYearId, fn($query) => $query->where('tahun_ajaran_id', $activeAcademicYearId))
-                    ->when($activeExamPackageId, fn($query) => $query->where('paket_ujian_id', $activeExamPackageId))
+                    ->when($activeAcademicYearId, fn ($query) => $query->where('tahun_ajaran_id', $activeAcademicYearId))
+                    ->when($activeExamPackageId, fn ($query) => $query->where('paket_ujian_id', $activeExamPackageId))
                     ->count(),
             ],
             'jadwalHariIni' => $exam->table('jadwal_ujian')
                 ->leftJoin('mapel', 'mapel.id', '=', 'jadwal_ujian.mapel_id')
                 ->leftJoin('paket_ujian', 'paket_ujian.id', '=', 'jadwal_ujian.paket_ujian_id')
                 ->select('jadwal_ujian.*', 'mapel.nama_mapel', 'paket_ujian.nama as paket_ujian_nama')
-                ->when($activeAcademicYearId, fn($query) => $query->where('jadwal_ujian.tahun_ajaran_id', $activeAcademicYearId))
-                ->when($activeExamPackageId, fn($query) => $query->where('jadwal_ujian.paket_ujian_id', $activeExamPackageId))
+                ->when($activeAcademicYearId, fn ($query) => $query->where('jadwal_ujian.tahun_ajaran_id', $activeAcademicYearId))
+                ->when($activeExamPackageId, fn ($query) => $query->where('jadwal_ujian.paket_ujian_id', $activeExamPackageId))
                 ->whereDate('tanggal', now('Asia/Jakarta')->toDateString())
                 ->orderBy('judul')
                 ->get(),
@@ -115,39 +139,42 @@ class PusmendikController extends Controller
         $latestHandlers = $this->latestHandlerSubquery($handlerTable, $scopeTa, $scopePaket);
 
         $query = $this->studentQuery(['recommendation_handlers.nominal_rekom', 'recommendation_handlers.handled_by_name'])
-            ->leftJoinSub($latestHandlers, 'latest_handlers', fn($join) => $join->on('latest_handlers.exam_siswa_id', '=', 'siswa.id'))
+            ->leftJoinSub($latestHandlers, 'latest_handlers', fn ($join) => $join->on('latest_handlers.exam_siswa_id', '=', 'siswa.id'))
             ->leftJoin($handlerJoinTable, 'recommendation_handlers.id', '=', 'latest_handlers.latest_id')
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q');
-                $query->where(fn($inner) => $inner
+                $query->where(fn ($inner) => $inner
                     ->where('siswa.nama', 'like', "%{$q}%")
                     ->orWhere('siswa.idyayasan', 'like', "%{$q}%")
                     ->orWhere('siswa.nis', 'like', "%{$q}%"));
             })
-            ->when($request->filled('tingkat'), fn($query) => $query->where('kelas.tingkat', $request->tingkat))
-            ->when($request->filled('kelas'), fn($query) => $query->where('kelas.nama_kelas', $request->kelas))
-            ->when($request->filled('status_pembayaran'), fn($query) => $query->where('sta.status_pembayaran', $request->status_pembayaran))
-            ->when($request->filled('rekomendasi'), fn($query) => $query->where(DB::raw("COALESCE(sta.rekomendasi, 'tidak')"), $request->rekomendasi))
-            ->when($request->filled('petugas'), fn($query) => $query->where('recommendation_handlers.handled_by_name', $request->petugas));
+            ->when($request->filled('tingkat'), fn ($query) => $query->where('kelas.tingkat', $request->tingkat))
+            ->when($request->filled('kelas'), fn ($query) => $query->where('kelas.nama_kelas', $request->kelas))
+            ->when($request->filled('status_pembayaran'), fn ($query) => $query->where('sta.status_pembayaran', $request->status_pembayaran))
+            ->when($request->filled('rekomendasi'), fn ($query) => $query->where(DB::raw("COALESCE(sta.rekomendasi, 'tidak')"), $request->rekomendasi))
+            ->when($request->filled('petugas'), fn ($query) => $query->where('recommendation_handlers.handled_by_name', $request->petugas));
 
         $perPage = $request->filled('per_page') && in_array($request->per_page, [10, 25, 50, 100]) ? $request->per_page : 25;
 
+        $students = $query->orderBy('kelas.tingkat')->orderBy('kelas.nama_kelas')->orderBy('siswa.nama')->paginate($perPage)->withQueryString();
+
         return view('students.index', [
-            'students' => $query->orderBy('kelas.tingkat')->orderBy('kelas.nama_kelas')->orderBy('siswa.nama')->paginate($perPage)->withQueryString(),
+            'students' => $students,
+            'ujianStatus' => $this->ujianStatusForStudents($students->getCollection()),
             'tingkat' => $this->exam()->table('kelas')
-                ->when($this->activeAcademicYearId(), fn($query, $tahunAjaranId) => $query->where('tahun_ajaran_id', $tahunAjaranId))
+                ->when($this->activeAcademicYearId(), fn ($query, $tahunAjaranId) => $query->where('tahun_ajaran_id', $tahunAjaranId))
                 ->distinct()
                 ->orderBy('tingkat')
                 ->pluck('tingkat'),
             'kelas' => $this->exam()->table('kelas')
-                ->when($this->activeAcademicYearId(), fn($query, $tahunAjaranId) => $query->where('tahun_ajaran_id', $tahunAjaranId))
+                ->when($this->activeAcademicYearId(), fn ($query, $tahunAjaranId) => $query->where('tahun_ajaran_id', $tahunAjaranId))
                 ->orderBy('tingkat')
                 ->orderBy('nama_kelas')
                 ->pluck('nama_kelas'),
             'petugas' => DB::table('recommendation_handlers')
                 ->whereNotNull('handled_by_name')
-                ->when($scopeTa, fn($q) => $q->where('tahun_ajaran_id', $scopeTa))
-                ->when($scopePaket, fn($q) => $q->where('paket_ujian_id', $scopePaket))
+                ->when($scopeTa, fn ($q) => $q->where('tahun_ajaran_id', $scopeTa))
+                ->when($scopePaket, fn ($q) => $q->where('paket_ujian_id', $scopePaket))
                 ->distinct()
                 ->orderBy('handled_by_name')
                 ->pluck('handled_by_name'),
@@ -156,17 +183,46 @@ class PusmendikController extends Controller
         ]);
     }
 
+    /**
+     * Peta `idyayasan` => `{status, kekurangan, item_belum_terpenuhi}` untuk daftar siswa.
+     *
+     * @param  Collection<int, mixed>  $students
+     * @return array<string, array{status: string, kekurangan: float, item_belum_terpenuhi: int}>
+     */
+    private function ujianStatusForStudents($students): array
+    {
+        $map = [];
+
+        try {
+            $gate = $this->pembayaranService()->statusUjianMap();
+        } catch (\Throwable $exception) {
+            $gate = [];
+        }
+
+        foreach ($students as $student) {
+            $status = $this->pembayaranService()->statusUjianSiswa($student->idyayasan, $gate, $student->status_pembayaran);
+
+            if ($status !== null) {
+                $map[$student->idyayasan] = $status;
+            }
+        }
+
+        return $map;
+    }
+
     public function studentDetail(int $id)
     {
         $student = $this->studentQuery()->where('siswa.id', $id)->firstOrFail();
-        $summary = $this->payment($student->idyayasan, true);
-        $payments = $this->payment($student->idyayasan, false);
+        $pembayaran = $this->payment($student->idyayasan);
 
         return view('students.show', [
             'student' => $student,
-            'summary' => $summary,
-            'payments' => $payments,
-            'paymentView' => $this->paymentViewModel($summary, $payments),
+            'summary' => $pembayaran['data'],
+            'payments' => $pembayaran['data'],
+            'paymentView' => $pembayaran['error']
+                ? ['error' => $pembayaran['error']]
+                : $this->paymentViewModel($pembayaran['data']),
+            'statusAdmin' => $this->statusAdministrasi($student->idyayasan, $student->status_pembayaran),
             'examInfo' => $this->studentExamInfo($student->id),
             'handler' => $this->latestHandlerForStudent($id, ...$this->recommendationScope()),
         ]);
@@ -181,8 +237,8 @@ class PusmendikController extends Controller
 
         $student = $this->studentQuery()->where('siswa.id', $id)->firstOrFail();
         $user = $request->session()->get('data_user');
-        $tunggakan = $this->payment($student->idyayasan, false);
-        $catatanRekomendasi = 'wali membayar Rp. ' . number_format((float) $data['nominal_rekom'], 0, ',', '.');
+        $pembayaran = $this->payment($student->idyayasan);
+        $catatanRekomendasi = 'wali membayar Rp. '.number_format((float) $data['nominal_rekom'], 0, ',', '.');
 
         // Rekomendasi melekat pada tahun ajaran + paket ujian yang aktif saat disimpan.
         $tahunAjaranId = $student->tahun_ajaran_id ?: $this->activeAcademicYearId();
@@ -196,13 +252,12 @@ class PusmendikController extends Controller
             'nama' => $student->nama,
             'nominal_rekom' => $data['nominal_rekom'],
             'catatan' => $catatanRekomendasi,
-            'tunggakan' => json_encode($tunggakan, JSON_UNESCAPED_UNICODE),
+            'tunggakan' => json_encode($pembayaran['data'], JSON_UNESCAPED_UNICODE),
             'handled_by' => $user['id'] ?? null,
             'handled_by_name' => $user['name'] ?? null,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-
 
         if ($student->tahun_ajaran_id) {
             $this->exam()->table('siswa_tahun_ajaran')
@@ -223,17 +278,19 @@ class PusmendikController extends Controller
         $student = $this->studentQuery()->where('siswa.id', $id)->firstOrFail();
         $handler = $this->latestHandlerForStudent($id, ...$this->recommendationScope());
         $storedTunggakan = $handler?->tunggakan ? json_decode($handler->tunggakan, true) : [];
-        $summary = $this->payment($student->idyayasan, true);
-        $payments = $storedTunggakan ?: $this->payment($student->idyayasan, false);
-        $paymentView = $this->paymentViewModel($summary, $payments);
+        $pembayaran = $this->payment($student->idyayasan);
+        $payload = $pembayaran['error'] ? $storedTunggakan : $pembayaran['data'];
+        $paymentView = $this->paymentViewModel($payload);
 
         if ($storedTunggakan && $paymentView['unpaid_periods'] === []) {
-            $freshPayments = $this->payment($student->idyayasan, false);
-            $freshPaymentView = $this->paymentViewModel($summary, $freshPayments);
+            $fresh = $this->payment($student->idyayasan);
 
-            if ($freshPaymentView['unpaid_periods'] !== []) {
-                $payments = $freshPayments;
-                $paymentView = $freshPaymentView;
+            if (! $fresh['error']) {
+                $freshPaymentView = $this->paymentViewModel($fresh['data']);
+
+                if ($freshPaymentView['unpaid_periods'] !== []) {
+                    $paymentView = $freshPaymentView;
+                }
             }
         }
 
@@ -256,7 +313,13 @@ class PusmendikController extends Controller
         ];
         $letter['text_2_html'] = $this->formatLetterText($letter['text_2']);
 
-        return view('students.print', compact('student', 'handler', 'paymentView', 'letter'));
+        return view('students.print', [
+            'student' => $student,
+            'handler' => $handler,
+            'paymentView' => $paymentView,
+            'letter' => $letter,
+            'statusAdmin' => $this->statusAdministrasi($student->idyayasan, $student->status_pembayaran),
+        ]);
     }
 
     public function paymentStatus(Request $request)
@@ -267,16 +330,21 @@ class PusmendikController extends Controller
 
         if ($request->filled('q')) {
             $student = $this->studentQuery()
-                ->where(fn($query) => $query->where('siswa.idyayasan', $request->q)->orWhere('siswa.nama', 'like', '%' . $request->q . '%'))
+                ->where(fn ($query) => $query->where('siswa.idyayasan', $request->q)->orWhere('siswa.nama', 'like', '%'.$request->q.'%'))
                 ->first();
             if ($student) {
-                $summary = $this->payment($student->idyayasan, true);
-                $payments = $this->payment($student->idyayasan, false);
-                $paymentView = $this->paymentViewModel($summary, $payments);
+                $pembayaran = $this->payment($student->idyayasan);
+                $summary = $pembayaran['error'] ? ['error' => $pembayaran['error']] : $pembayaran['data'];
+                $paymentView = $pembayaran['error'] ? null : $this->paymentViewModel($pembayaran['data']);
             }
         }
 
-        return view('payments.status', compact('student', 'summary', 'paymentView'));
+        return view('payments.status', [
+            'student' => $student,
+            'summary' => $summary,
+            'paymentView' => $paymentView,
+            'statusAdmin' => $student ? $this->statusAdministrasi($student->idyayasan, $student->status_pembayaran) : null,
+        ]);
     }
 
     public function studentSearch(Request $request)
@@ -287,21 +355,25 @@ class PusmendikController extends Controller
             return response()->json([]);
         }
 
+        $results = $this->studentQuery()
+            ->where(fn ($query) => $query
+                ->where('siswa.nama', 'like', "%{$q}%")
+                ->orWhere('siswa.idyayasan', 'like', "%{$q}%")
+                ->orWhere('siswa.nis', 'like', "%{$q}%"))
+            ->orderBy('siswa.nama')
+            ->limit(8)
+            ->get();
+
+        $statusMap = $this->ujianStatusForStudents($results);
+
         return response()->json(
-            $this->studentQuery()
-                ->where(fn($query) => $query
-                    ->where('siswa.nama', 'like', "%{$q}%")
-                    ->orWhere('siswa.idyayasan', 'like', "%{$q}%")
-                    ->orWhere('siswa.nis', 'like', "%{$q}%"))
-                ->orderBy('siswa.nama')
-                ->limit(8)
-                ->get()
-                ->map(fn($student) => [
+            $results
+                ->map(fn ($student) => [
                     'id' => $student->id,
                     'idyayasan' => $student->idyayasan,
                     'nama' => $student->nama,
                     'kelas' => $student->nama_kelas,
-                    'status_pembayaran' => $student->status_pembayaran,
+                    'status_pembayaran' => $statusMap[$student->idyayasan]['status'] ?? $student->status_pembayaran,
                     'url' => route('payments.status', ['q' => $student->idyayasan]),
                 ])
         );
@@ -318,11 +390,11 @@ class PusmendikController extends Controller
         $latestHandlers = $this->latestHandlerSubquery($handlerTable, $scopeTa, $scopePaket);
 
         $query = $this->studentQuery(['recommendation_handlers.nominal_rekom', 'recommendation_handlers.handled_by_name'])
-            ->leftJoinSub($latestHandlers, 'latest_handlers', fn($join) => $join->on('latest_handlers.exam_siswa_id', '=', 'siswa.id'))
+            ->leftJoinSub($latestHandlers, 'latest_handlers', fn ($join) => $join->on('latest_handlers.exam_siswa_id', '=', 'siswa.id'))
             ->leftJoin($handlerJoinTable, 'recommendation_handlers.id', '=', 'latest_handlers.latest_id');
 
         if (mb_strlen($q) >= 2) {
-            $query->where(fn($inner) => $inner
+            $query->where(fn ($inner) => $inner
                 ->where('siswa.nama', 'like', "%{$q}%")
                 ->orWhere('siswa.idyayasan', 'like', "%{$q}%")
                 ->orWhere('siswa.nis', 'like', "%{$q}%"));
@@ -348,19 +420,23 @@ class PusmendikController extends Controller
             $query->where('recommendation_handlers.handled_by_name', $request->petugas);
         }
 
+        $results = $query
+            ->orderBy('kelas.tingkat')
+            ->orderBy('kelas.nama_kelas')
+            ->orderBy('siswa.nama')
+            ->limit(50)
+            ->get();
+
+        $statusMap = $this->ujianStatusForStudents($results);
+
         return response()->json(
-            $query
-                ->orderBy('kelas.tingkat')
-                ->orderBy('kelas.nama_kelas')
-                ->orderBy('siswa.nama')
-                ->limit(50)
-                ->get()
-                ->map(fn($student) => [
+            $results
+                ->map(fn ($student) => [
                     'id' => $student->id,
                     'idyayasan' => $student->idyayasan,
                     'nama' => $student->nama,
                     'kelas' => $student->nama_kelas,
-                    'status_pembayaran' => $student->status_pembayaran,
+                    'status_pembayaran' => $statusMap[$student->idyayasan]['status'] ?? $student->status_pembayaran,
                     'rekomendasi' => $student->rekomendasi ?: 'tidak',
                     'nominal_rekom' => $student->nominal_rekom,
                     'handled_by_name' => $student->handled_by_name,
@@ -379,9 +455,9 @@ class PusmendikController extends Controller
             ->leftJoin('tahun_ajaran', 'tahun_ajaran.id', '=', 'jadwal_ujian.tahun_ajaran_id')
             ->leftJoin('paket_ujian', 'paket_ujian.id', '=', 'jadwal_ujian.paket_ujian_id')
             ->select('jadwal_ujian.*', 'mapel.nama_mapel', 'tahun_ajaran.nama as tahun_ajaran_nama', 'paket_ujian.nama as paket_ujian_nama')
-            ->when($request->filled('tanggal'), fn($q) => $q->whereDate('tanggal', $request->tanggal))
-            ->when($activeAcademicYearId, fn($q) => $q->where('jadwal_ujian.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, fn($q) => $q->where('jadwal_ujian.paket_ujian_id', $activeExamPackageId))
+            ->when($request->filled('tanggal'), fn ($q) => $q->whereDate('tanggal', $request->tanggal))
+            ->when($activeAcademicYearId, fn ($q) => $q->where('jadwal_ujian.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeExamPackageId, fn ($q) => $q->where('jadwal_ujian.paket_ujian_id', $activeExamPackageId))
             ->orderBy('tanggal')
             ->orderBy('judul')
             ->get();
@@ -392,8 +468,8 @@ class PusmendikController extends Controller
             'tanggalOptions' => $this->exam()->table('jadwal_ujian')
                 ->select('tanggal')
                 ->distinct()
-                ->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))
-                ->when($activeExamPackageId, fn($q) => $q->where('paket_ujian_id', $activeExamPackageId))
+                ->when($activeAcademicYearId, fn ($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))
+                ->when($activeExamPackageId, fn ($q) => $q->where('paket_ujian_id', $activeExamPackageId))
                 ->orderBy('tanggal')
                 ->pluck('tanggal'),
         ]);
@@ -418,12 +494,12 @@ class PusmendikController extends Controller
             ->select('siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'sr.nama_sesi', 'sr.waktu_mulai', 'sr.waktu_selesai', 'ruangan.nama_ruangan', 'srs.status_kehadiran')
             ->whereNull('siswa.deleted_at')
             ->where('sr.sumber', 'sumber')->where('sr.paket_ujian_id', $activeExamPackageId)
-            ->when($activeAcademicYearId, fn($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($request->filled('q'), fn($q) => $q->where(fn($i) => $i->where('siswa.nama', 'like', '%' . $request->q . '%')->orWhere('siswa.idyayasan', 'like', '%' . $request->q . '%')))
-            ->when($request->filled('tingkat'), fn($q) => $q->where('kelas.tingkat', $request->tingkat))
-            ->when($request->filled('kelas'), fn($q) => $q->where('kelas.nama_kelas', $request->kelas))
-            ->when($request->filled('ruangan'), fn($q) => $q->where('ruangan.nama_ruangan', $request->ruangan))
-            ->when($request->filled('sesi'), fn($q) => $q->where('sr.nama_sesi', $request->sesi))
+            ->when($activeAcademicYearId, fn ($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($request->filled('q'), fn ($q) => $q->where(fn ($i) => $i->where('siswa.nama', 'like', '%'.$request->q.'%')->orWhere('siswa.idyayasan', 'like', '%'.$request->q.'%')))
+            ->when($request->filled('tingkat'), fn ($q) => $q->where('kelas.tingkat', $request->tingkat))
+            ->when($request->filled('kelas'), fn ($q) => $q->where('kelas.nama_kelas', $request->kelas))
+            ->when($request->filled('ruangan'), fn ($q) => $q->where('ruangan.nama_ruangan', $request->ruangan))
+            ->when($request->filled('sesi'), fn ($q) => $q->where('sr.nama_sesi', $request->sesi))
             ->orderBy('ruangan.nama_ruangan')
             ->orderBy('sr.waktu_mulai')
             ->orderBy('siswa.nama')
@@ -457,10 +533,10 @@ class PusmendikController extends Controller
             ->select('siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'sr.nama_sesi', 'sr.waktu_mulai', 'sr.waktu_selesai', 'ruangan.nama_ruangan', 'srs.status_kehadiran')
             ->whereNull('siswa.deleted_at')
             ->where('sr.sumber', 'sumber')
-            ->when($activeAcademicYearId, fn($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId));
+            ->when($activeAcademicYearId, fn ($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId));
 
         if (mb_strlen($q) >= 2) {
-            $query->where(fn($inner) => $inner
+            $query->where(fn ($inner) => $inner
                 ->where('siswa.nama', 'like', "%{$q}%")
                 ->orWhere('siswa.idyayasan', 'like', "%{$q}%")
                 ->orWhere('siswa.nis', 'like', "%{$q}%"));
@@ -489,15 +565,15 @@ class PusmendikController extends Controller
                 ->orderBy('siswa.nama')
                 ->limit(100)
                 ->get()
-                ->groupBy(fn($item) => ($item->nama_ruangan ?? '-') . '|' . ($item->nama_sesi ?? '-'))
-                ->map(fn($rows, $key) => [
+                ->groupBy(fn ($item) => ($item->nama_ruangan ?? '-').'|'.($item->nama_sesi ?? '-'))
+                ->map(fn ($rows, $key) => [
                     'key' => $key,
                     'ruangan' => explode('|', $key)[0],
                     'sesi' => explode('|', $key)[1],
                     'waktu_mulai' => $rows->first()->waktu_mulai ?? '-',
                     'waktu_selesai' => $rows->first()->waktu_selesai ?? '-',
                     'count' => $rows->count(),
-                    'students' => $rows->map(fn($student) => [
+                    'students' => $rows->map(fn ($student) => [
                         'nama' => $student->nama,
                         'idyayasan' => $student->idyayasan,
                         'nama_kelas' => $student->nama_kelas,
@@ -516,8 +592,8 @@ class PusmendikController extends Controller
             ->join('jadwal_ujian as ju2', 'ju2.id', '=', 'jsr2.jadwal_ujian_id')
             ->select('ju2.tanggal', 'jsr2.sesi_ruangan_id', DB::raw('MAX(jsr2.pengawas_id) as pengawas_id'))
             ->whereNotNull('jsr2.pengawas_id')
-            ->when($activeAcademicYearId, fn($q) => $q->where('ju2.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, fn($q) => $q->where('ju2.paket_ujian_id', $activeExamPackageId))
+            ->when($activeAcademicYearId, fn ($q) => $q->where('ju2.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeExamPackageId, fn ($q) => $q->where('ju2.paket_ujian_id', $activeExamPackageId))
             ->groupBy('ju2.tanggal', 'jsr2.sesi_ruangan_id');
 
         $items = $this->exam()->table('jadwal_ujian_sesi_ruangan as jsr')
@@ -532,14 +608,13 @@ class PusmendikController extends Controller
             ->leftJoin('tahun_ajaran', 'tahun_ajaran.id', '=', 'ju.tahun_ajaran_id')
             ->leftJoin('paket_ujian', 'paket_ujian.id', '=', 'ju.paket_ujian_id')
             ->select('ju.tanggal', 'ju.judul', 'sr.nama_sesi', 'ruangan.nama_ruangan', 'pengawas.nama as pengawas', 'tahun_ajaran.nama as tahun_ajaran_nama', 'paket_ujian.nama as paket_ujian_nama')
-            ->when($request->filled('tanggal'), fn($q) => $q->whereDate('ju.tanggal', $request->tanggal))
-            ->when($activeAcademicYearId, fn($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, fn($q) => $q->where('ju.paket_ujian_id', $activeExamPackageId))
+            ->when($request->filled('tanggal'), fn ($q) => $q->whereDate('ju.tanggal', $request->tanggal))
+            ->when($activeAcademicYearId, fn ($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeExamPackageId, fn ($q) => $q->where('ju.paket_ujian_id', $activeExamPackageId))
             ->orderBy('ruangan.nama_ruangan')
             ->orderBy('ju.tanggal')
             ->orderBy('sr.nama_sesi')
             ->get();
-
 
         return view('supervisors.index', [
             'title' => 'Pengawas',
@@ -548,8 +623,8 @@ class PusmendikController extends Controller
             'tanggalOptions' => $this->exam()->table('jadwal_ujian')
                 ->select('tanggal')
                 ->distinct()
-                ->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))
-                ->when($activeExamPackageId, fn($q) => $q->where('paket_ujian_id', $activeExamPackageId))
+                ->when($activeAcademicYearId, fn ($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))
+                ->when($activeExamPackageId, fn ($q) => $q->where('paket_ujian_id', $activeExamPackageId))
                 ->orderBy('tanggal')
                 ->limit(20)
                 ->pluck('tanggal'),
@@ -572,8 +647,8 @@ class PusmendikController extends Controller
             ->select('ju.judul', 'sr.nama_sesi', 'ruangan.nama_ruangan', DB::raw('COUNT(*) peserta'), DB::raw('SUM(h.jumlah_dijawab) dijawab'), DB::raw('SUM(h.jumlah_tidak_dijawab) belum'))
             ->whereNull('siswa.deleted_at')
             ->whereDate('ju.tanggal', $today)
-            ->when($activeAcademicYearId, fn($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, fn($q) => $q->where('ju.paket_ujian_id', $activeExamPackageId))
+            ->when($activeAcademicYearId, fn ($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeExamPackageId, fn ($q) => $q->where('ju.paket_ujian_id', $activeExamPackageId))
             ->where('sr.waktu_mulai', '<=', $now)
             ->where('sr.waktu_selesai', '>=', $now)
             ->groupBy('ju.judul', 'sr.nama_sesi', 'ruangan.nama_ruangan')
@@ -588,8 +663,8 @@ class PusmendikController extends Controller
             ->select('siswa.nama', 'siswa.idyayasan', 'ju.judul', 'sr.nama_sesi', 'ruangan.nama_ruangan', 'h.jumlah_soal', 'h.jumlah_dijawab', 'h.jumlah_tidak_dijawab', 'h.status')
             ->whereNull('siswa.deleted_at')
             ->whereDate('ju.tanggal', $today)
-            ->when($activeAcademicYearId, fn($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, fn($q) => $q->where('ju.paket_ujian_id', $activeExamPackageId))
+            ->when($activeAcademicYearId, fn ($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeExamPackageId, fn ($q) => $q->where('ju.paket_ujian_id', $activeExamPackageId))
             ->where('sr.waktu_mulai', '<=', $now)
             ->where('sr.waktu_selesai', '>=', $now)
             ->orderBy('ruangan.nama_ruangan')
@@ -632,12 +707,12 @@ class PusmendikController extends Controller
             ->orderBy('siswa.nama')
             ->get();
 
-        $filename = 'hasil-ujian-' . now('Asia/Jakarta')->format('Ymd-His') . '.xls';
+        $filename = 'hasil-ujian-'.now('Asia/Jakarta')->format('Ymd-His').'.xls';
 
         return response()
             ->view('results.export', compact('items'))
             ->header('Content-Type', 'application/vnd.ms-excel; charset=UTF-8')
-            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+            ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
     }
 
     public function users()
@@ -678,16 +753,16 @@ class PusmendikController extends Controller
             })
             ->select('siswa.id as siswa_id', 'siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'ju.tanggal', 'ju.judul', 'sr.nama_sesi', 'ruangan.nama_ruangan', 'srs.status_kehadiran', 'e.status_enrollment', 'e.waktu_mulai_ujian', 'e.waktu_selesai_ujian')
             ->whereNull('siswa.deleted_at')
-            ->when($request->filled('q'), fn($q) => $q->where(fn($i) => $i->where('siswa.nama', 'like', '%' . $request->q . '%')->orWhere('siswa.idyayasan', 'like', '%' . $request->q . '%')))
-            ->when($request->filled('tingkat'), fn($q) => $q->where('kelas.tingkat', $request->tingkat))
-            ->when($request->filled('kelas'), fn($q) => $q->where('kelas.nama_kelas', $request->kelas))
-            ->when($request->filled('sesi'), fn($q) => $q->where('sr.nama_sesi', $request->sesi))
-            ->when($request->filled('ruangan'), fn($q) => $q->where('ruangan.nama_ruangan', $request->ruangan))
-            ->when($request->filled('status_kehadiran'), fn($q) => $q->where('srs.status_kehadiran', $request->status_kehadiran))
-            ->when($request->filled('tanggal_awal'), fn($q) => $q->whereDate('ju.tanggal', '>=', $request->tanggal_awal))
-            ->when($request->filled('tanggal_akhir'), fn($q) => $q->whereDate('ju.tanggal', '<=', $request->tanggal_akhir))
-            ->when($activeAcademicYearId, fn($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, fn($q) => $q->where('ju.paket_ujian_id', $activeExamPackageId))
+            ->when($request->filled('q'), fn ($q) => $q->where(fn ($i) => $i->where('siswa.nama', 'like', '%'.$request->q.'%')->orWhere('siswa.idyayasan', 'like', '%'.$request->q.'%')))
+            ->when($request->filled('tingkat'), fn ($q) => $q->where('kelas.tingkat', $request->tingkat))
+            ->when($request->filled('kelas'), fn ($q) => $q->where('kelas.nama_kelas', $request->kelas))
+            ->when($request->filled('sesi'), fn ($q) => $q->where('sr.nama_sesi', $request->sesi))
+            ->when($request->filled('ruangan'), fn ($q) => $q->where('ruangan.nama_ruangan', $request->ruangan))
+            ->when($request->filled('status_kehadiran'), fn ($q) => $q->where('srs.status_kehadiran', $request->status_kehadiran))
+            ->when($request->filled('tanggal_awal'), fn ($q) => $q->whereDate('ju.tanggal', '>=', $request->tanggal_awal))
+            ->when($request->filled('tanggal_akhir'), fn ($q) => $q->whereDate('ju.tanggal', '<=', $request->tanggal_akhir))
+            ->when($activeAcademicYearId, fn ($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeExamPackageId, fn ($q) => $q->where('ju.paket_ujian_id', $activeExamPackageId))
             ->orderByDesc('ju.tanggal')
             ->orderBy('siswa.nama')
             ->paginate(30)
@@ -727,6 +802,7 @@ class PusmendikController extends Controller
                 'attachments' => $attachments->get($guide->id, collect())->map(function ($attachment) {
                     $attachment->url = $this->publicStorageUrl($attachment->file_path);
                     $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
+
                     return $attachment;
                 }),
             ];
@@ -735,8 +811,27 @@ class PusmendikController extends Controller
         $studentGuides = $allGuidesWithToc->where('group', 'siswa')->values();
         $committeeGuides = $allGuidesWithToc->where('group', 'panitia')->values();
 
+        // Pilih panduan awal: `?guide=<id>` menang, lalu `?role=<slug>` (mis.
+        // `role=naskah` dari link "Petugas Naskah"), lalu `?group=` (siswa/panitia).
         if ($selectedGuideId === 0) {
-            $selectedGuideId = ($studentGuides->first() ?? $committeeGuides->first())->id ?? 0;
+            $group = $request->query('group');
+            $role = $request->query('role');
+
+            $default = null;
+
+            if (is_string($role) && $role !== '') {
+                $default = $allGuidesWithToc->firstWhere('slug', $role);
+            }
+
+            if (! $default) {
+                $default = match ($group) {
+                    'panitia' => $committeeGuides->first() ?? $studentGuides->first(),
+                    'siswa' => $studentGuides->first() ?? $committeeGuides->first(),
+                    default => $studentGuides->first() ?? $committeeGuides->first(),
+                };
+            }
+
+            $selectedGuideId = $default->id ?? 0;
         }
 
         $selectedGuide = $allGuidesWithToc->firstWhere('id', $selectedGuideId);
@@ -761,7 +856,7 @@ class PusmendikController extends Controller
             ->where('is_active', true)
             ->first();
 
-        if (!$guideData) {
+        if (! $guideData) {
             return response()->json(['error' => 'Panduan tidak ditemukan'], 404);
         }
 
@@ -772,6 +867,7 @@ class PusmendikController extends Controller
             ->map(function ($attachment) {
                 $attachment->url = $this->publicStorageUrl($attachment->file_path);
                 $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
+
                 return $attachment;
             });
 
@@ -800,7 +896,7 @@ class PusmendikController extends Controller
                 ->get()
                 ->map(function ($attachment) {
                     $attachment->url = $this->publicStorageUrl($attachment->file_path);
-                    $attachment->markdown = '[' . $attachment->title . '](' . $attachment->url . ')';
+                    $attachment->markdown = '['.$attachment->title.']('.$attachment->url.')';
                     $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
 
                     return $attachment;
@@ -867,7 +963,7 @@ class PusmendikController extends Controller
         $url = $this->publicStorageUrl($path);
         $alt = $data['alt'] ?: pathinfo($data['image']->getClientOriginalName(), PATHINFO_FILENAME);
 
-        return back()->with('success', 'Gambar berhasil diupload.')->with('uploaded_image_markdown', '![' . $alt . '](' . $url . ')');
+        return back()->with('success', 'Gambar berhasil diupload.')->with('uploaded_image_markdown', '!['.$alt.']('.$url.')');
     }
 
     public function uploadGuideImageAjax(Request $request)
@@ -880,7 +976,7 @@ class PusmendikController extends Controller
         $path = $data['image']->store('guides/images', 'public');
         $url = $this->publicStorageUrl($path);
         $alt = $data['alt'] ?: pathinfo($data['image']->getClientOriginalName(), PATHINFO_FILENAME);
-        $markdown = '![' . $alt . '](' . $url . ')';
+        $markdown = '!['.$alt.']('.$url.')';
 
         return response()->json([
             'success' => true,
@@ -970,11 +1066,11 @@ class PusmendikController extends Controller
             $item = $toc[$index] ?? null;
             $index++;
 
-            if (!$item) {
+            if (! $item) {
                 return $matches[0];
             }
 
-            return '<h' . $matches[1] . ' id="' . e($item['id']) . '">' . $matches[2] . '</h' . $matches[1] . '>';
+            return '<h'.$matches[1].' id="'.e($item['id']).'">'.$matches[2].'</h'.$matches[1].'>';
         }, $html);
 
         return ['html' => $html, 'toc' => $toc];
@@ -985,8 +1081,8 @@ class PusmendikController extends Controller
         $publicUrl = rtrim((string) config('filesystems.disks.public.url'), '/');
         $appUrl = rtrim((string) config('app.url'), '/');
 
-        foreach (array_filter([$publicUrl, $appUrl . '/storage', 'http://localhost/storage']) as $baseUrl) {
-            $markdown = str_replace($baseUrl . '/', '/storage/', $markdown);
+        foreach (array_filter([$publicUrl, $appUrl.'/storage', 'http://localhost/storage']) as $baseUrl) {
+            $markdown = str_replace($baseUrl.'/', '/storage/', $markdown);
         }
 
         return $markdown;
@@ -994,7 +1090,7 @@ class PusmendikController extends Controller
 
     private function publicStorageUrl(string $path): string
     {
-        return '/storage/' . ltrim(str_replace('\\', '/', $path), '/');
+        return '/storage/'.ltrim(str_replace('\\', '/', $path), '/');
     }
 
     private function guideTableOfContents(string $markdown): array
@@ -1009,7 +1105,7 @@ class PusmendikController extends Controller
             $counter = 2;
 
             while (in_array($slug, $used, true)) {
-                $slug = $base . '-' . $counter;
+                $slug = $base.'-'.$counter;
                 $counter++;
             }
 
@@ -1059,14 +1155,14 @@ MD;
     private function formatFileSize(int $bytes): string
     {
         if ($bytes >= 1048576) {
-            return number_format($bytes / 1048576, 1, ',', '.') . ' MB';
+            return number_format($bytes / 1048576, 1, ',', '.').' MB';
         }
 
         if ($bytes >= 1024) {
-            return number_format($bytes / 1024, 1, ',', '.') . ' KB';
+            return number_format($bytes / 1024, 1, ',', '.').' KB';
         }
 
-        return $bytes . ' B';
+        return $bytes.' B';
     }
 
     public function settings()
@@ -1162,7 +1258,7 @@ MD;
                 'ruangan.nama_ruangan'
             )
             ->where('srs.siswa_id', $studentId)
-            ->when($activeAcademicYearId, fn($query) => $query->where('sr.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeAcademicYearId, fn ($query) => $query->where('sr.tahun_ajaran_id', $activeAcademicYearId))
             ->when($activeExamPackageId, function ($query) use ($activeAcademicYearId, $activeExamPackageId) {
                 $query->whereExists(function ($exists) use ($activeAcademicYearId, $activeExamPackageId) {
                     $exists->select(DB::raw(1))
@@ -1170,7 +1266,7 @@ MD;
                         ->join('jadwal_ujian as ju', 'ju.id', '=', 'jsr.jadwal_ujian_id')
                         ->whereColumn('jsr.sesi_ruangan_id', 'sr.id')
                         ->where('ju.paket_ujian_id', $activeExamPackageId)
-                        ->when($activeAcademicYearId, fn($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId));
+                        ->when($activeAcademicYearId, fn ($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId));
                 });
             })
             ->orderBy('ruangan.nama_ruangan')
@@ -1199,8 +1295,8 @@ MD;
                 'e.waktu_selesai_ujian'
             )
             ->where('e.siswa_id', $studentId)
-            ->when($activeAcademicYearId, fn($query) => $query->where('ju.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, fn($query) => $query->where('ju.paket_ujian_id', $activeExamPackageId))
+            ->when($activeAcademicYearId, fn ($query) => $query->where('ju.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeExamPackageId, fn ($query) => $query->where('ju.paket_ujian_id', $activeExamPackageId))
             ->orderBy('ju.tanggal')
             ->orderBy('ju.judul')
             ->get();
@@ -1229,8 +1325,8 @@ MD;
                 'h.waktu_selesai'
             )
             ->where('h.siswa_id', $studentId)
-            ->when($activeAcademicYearId, fn($query) => $query->where('ju.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, fn($query) => $query->where('ju.paket_ujian_id', $activeExamPackageId))
+            ->when($activeAcademicYearId, fn ($query) => $query->where('ju.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeExamPackageId, fn ($query) => $query->where('ju.paket_ujian_id', $activeExamPackageId))
             ->orderByDesc('ju.tanggal')
             ->orderBy('ju.judul')
             ->get();
@@ -1253,7 +1349,7 @@ MD;
             'ruangan' => $exam->table('sesi_ruangan as sr')
                 ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
                 ->where('sr.sumber', 'sumber')
-                ->when($activeAcademicYearId, fn($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId))
+                ->when($activeAcademicYearId, fn ($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId))
                 ->distinct()
                 ->orderBy('ruangan.nama_ruangan')
                 ->pluck('ruangan.nama_ruangan'),
@@ -1267,13 +1363,13 @@ MD;
         $activeExamPackageId = $this->activeExamPackageId($activeAcademicYearId);
 
         return [
-            'tingkat' => $exam->table('kelas')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->whereNotNull('tingkat')->distinct()->orderBy('tingkat')->pluck('tingkat'),
-            'kelas' => $exam->table('kelas')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->distinct()->orderBy('nama_kelas')->pluck('nama_kelas'),
-            'sesi' => $exam->table('sesi_ruangan')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->distinct()->orderBy('nama_sesi')->pluck('nama_sesi'),
+            'tingkat' => $exam->table('kelas')->when($activeAcademicYearId, fn ($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->whereNotNull('tingkat')->distinct()->orderBy('tingkat')->pluck('tingkat'),
+            'kelas' => $exam->table('kelas')->when($activeAcademicYearId, fn ($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->distinct()->orderBy('nama_kelas')->pluck('nama_kelas'),
+            'sesi' => $exam->table('sesi_ruangan')->when($activeAcademicYearId, fn ($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->distinct()->orderBy('nama_sesi')->pluck('nama_sesi'),
             'ruangan' => $exam->table('ruangan')->distinct()->orderBy('nama_ruangan')->pluck('nama_ruangan'),
             'status_kehadiran' => collect(['hadir', 'tidak_hadir', 'sakit', 'izin']),
-            'tanggal_awal' => $exam->table('jadwal_ujian')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->when($activeExamPackageId, fn($q) => $q->where('paket_ujian_id', $activeExamPackageId))->distinct()->orderByDesc('tanggal')->pluck('tanggal'),
-            'tanggal_akhir' => $exam->table('jadwal_ujian')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->when($activeExamPackageId, fn($q) => $q->where('paket_ujian_id', $activeExamPackageId))->distinct()->orderByDesc('tanggal')->pluck('tanggal'),
+            'tanggal_awal' => $exam->table('jadwal_ujian')->when($activeAcademicYearId, fn ($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->when($activeExamPackageId, fn ($q) => $q->where('paket_ujian_id', $activeExamPackageId))->distinct()->orderByDesc('tanggal')->pluck('tanggal'),
+            'tanggal_akhir' => $exam->table('jadwal_ujian')->when($activeAcademicYearId, fn ($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->when($activeExamPackageId, fn ($q) => $q->where('paket_ujian_id', $activeExamPackageId))->distinct()->orderByDesc('tanggal')->pluck('tanggal'),
         ];
     }
 
@@ -1321,14 +1417,14 @@ MD;
                 'h.waktu_selesai'
             )
             ->whereNull('siswa.deleted_at')
-            ->when($request->filled('q'), fn($query) => $query->where(fn($inner) => $inner
-                ->where('siswa.nama', 'like', '%' . $request->q . '%')
-                ->orWhere('siswa.idyayasan', 'like', '%' . $request->q . '%')))
-            ->when($request->filled('tingkat'), fn($query) => $query->where('kelas.tingkat', $request->tingkat))
-            ->when($request->filled('kelas'), fn($query) => $query->where('kelas.nama_kelas', $request->kelas))
-            ->when($request->filled('ujian'), fn($query) => $query->where('ju.id', $request->ujian))
-            ->when($activeAcademicYearId, fn($query) => $query->where('ju.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, fn($query) => $query->where('ju.paket_ujian_id', $activeExamPackageId));
+            ->when($request->filled('q'), fn ($query) => $query->where(fn ($inner) => $inner
+                ->where('siswa.nama', 'like', '%'.$request->q.'%')
+                ->orWhere('siswa.idyayasan', 'like', '%'.$request->q.'%')))
+            ->when($request->filled('tingkat'), fn ($query) => $query->where('kelas.tingkat', $request->tingkat))
+            ->when($request->filled('kelas'), fn ($query) => $query->where('kelas.nama_kelas', $request->kelas))
+            ->when($request->filled('ujian'), fn ($query) => $query->where('ju.id', $request->ujian))
+            ->when($activeAcademicYearId, fn ($query) => $query->where('ju.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeExamPackageId, fn ($query) => $query->where('ju.paket_ujian_id', $activeExamPackageId));
     }
 
     private function examResultFilterOptions(): array
@@ -1338,227 +1434,48 @@ MD;
         $activeExamPackageId = $this->activeExamPackageId($activeAcademicYearId);
 
         return [
-            'tingkat' => $exam->table('kelas')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->whereNotNull('tingkat')->distinct()->orderBy('tingkat')->pluck('tingkat'),
-            'kelas' => $exam->table('kelas')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->distinct()->orderBy('nama_kelas')->pluck('nama_kelas'),
-            'ujian' => $exam->table('jadwal_ujian')->when($activeAcademicYearId, fn($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->when($activeExamPackageId, fn($q) => $q->where('paket_ujian_id', $activeExamPackageId))->orderByDesc('tanggal')->orderBy('judul')->pluck('judul', 'id'),
+            'tingkat' => $exam->table('kelas')->when($activeAcademicYearId, fn ($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->whereNotNull('tingkat')->distinct()->orderBy('tingkat')->pluck('tingkat'),
+            'kelas' => $exam->table('kelas')->when($activeAcademicYearId, fn ($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->distinct()->orderBy('nama_kelas')->pluck('nama_kelas'),
+            'ujian' => $exam->table('jadwal_ujian')->when($activeAcademicYearId, fn ($q) => $q->where('tahun_ajaran_id', $activeAcademicYearId))->when($activeExamPackageId, fn ($q) => $q->where('paket_ujian_id', $activeExamPackageId))->orderByDesc('tanggal')->orderBy('judul')->pluck('judul', 'id'),
         ];
     }
 
-    private function payment(string $idyayasan, bool $summary): array
-    {
-        $base = rtrim($this->setting('payment_api_base_url', env('PAYMENT_API_BASE_URL', 'https://api.daruttaqwa.or.id/sisda/v1')), '/');
-        $url = $base . '/payments/' . $idyayasan . ($summary ? '/summary' : '');
-
-        try {
-            return Http::timeout(12)->acceptJson()->get($url)->json() ?? [];
-        } catch (\Throwable $exception) {
-            return ['error' => $exception->getMessage()];
-        }
-    }
-
-    private function paymentViewModel(array $summary, array $payments): array
-    {
-        $periods = $this->extractPeriodGroups($payments);
-        $billRows = collect($periods)->flatMap(fn($period) => $period['items'])->values()->all();
-
-        $periodTotalRemaining = collect($periods)->sum('total_remaining');
-        $periodTotalBill = collect($periods)->sum('total_billed');
-        $periodTotalPaid = collect($periods)->sum('total_paid');
-
-        $totalRemaining = $periods !== []
-            ? $periodTotalRemaining
-            : ($this->sumDebtByKeyDeep($summary, 'total_remaining') ?: abs($this->firstNumericByKeysDeep($summary, ['remaining', 'total_tunggakan', 'tunggakan']) ?? 0));
-
-        $totalBill = $periodTotalBill > 0
-            ? $periodTotalBill
-            : ($this->firstNumericByKeysDeep($summary, ['total_paid', 'paid', 'total_tagihan', 'amount', 'total']) ?? 0);
-
-        $totalPaid = $periodTotalPaid > 0
-            ? $periodTotalPaid
-            : ($this->firstNumericByKeysDeep($summary, ['total_billed', 'billed', 'total_bayar']) ?? max(0, $totalBill - $totalRemaining));
-
-        return [
-            'total_remaining' => (float) $totalRemaining,
-            'total_bill' => (float) $totalBill,
-            'total_paid' => (float) $totalPaid,
-            'periods' => $periods,
-            'unpaid_periods' => $this->unpaidPeriods($periods),
-            'bills' => $billRows,
-            'raw_summary' => $summary,
-            'raw_payments' => $payments,
-        ];
-    }
-
-    private function extractPeriodGroups(array $payload): array
-    {
-        $students = $payload['data'] ?? $payload;
-        if (!is_array($students)) {
-            return [];
-        }
-
-        if (!array_is_list($students)) {
-            $students = [$students];
-        }
-
-        $periods = [];
-
-        foreach ($students as $student) {
-            foreach (($student['periods'] ?? []) as $period) {
-                $periodRows = [];
-                $categoryGroups = [];
-
-                foreach (($period['categories'] ?? []) as $category) {
-                    $categoryName = $category['category_name'] ?? 'Tagihan';
-                    $categoryItems = [];
-
-                    foreach (($category['items'] ?? []) as $item) {
-                        $remaining = abs((float) ($item['remaining_balance'] ?? $item['total_remaining'] ?? 0));
-                        $row = [
-                            'name' => $categoryName,
-                            'period' => (string) ($period['period_id'] ?? '-'),
-                            'kelas_info' => $period['kelas_info'] ?? '-',
-                            'unit' => $item['unit_name'] ?? $item['unit_id'] ?? '-',
-                            'amount' => (float) ($item['amount_paid'] ?? 0),
-                            'paid' => (float) ($item['amount_billed'] ?? 0),
-                            'remaining' => $remaining,
-                            'journal_date' => $item['journal_date'] ?? '-',
-                            'last_updated' => $item['last_updated'] ?? '-',
-                            'payment_status' => $item['payment_status'] ?? '-',
-                            'raw' => $item,
-                        ];
-
-                        $categoryItems[] = $row;
-
-                        if ($remaining > 0) {
-                            $periodRows[] = $row;
-                        }
-                    }
-
-                    $categoryRemaining = $this->summaryDebt($category['summary'] ?? [], 'total_remaining', collect($categoryItems)->sum('remaining'));
-                    if ($categoryRemaining > 0 && collect($categoryItems)->sum('remaining') <= 0) {
-                        $periodRows[] = [
-                            'name' => $categoryName,
-                            'period' => (string) ($period['period_id'] ?? '-'),
-                            'kelas_info' => $period['kelas_info'] ?? '-',
-                            'unit' => '-',
-                            'amount' => (float) ($category['summary']['total_paid'] ?? 0),
-                            'paid' => (float) ($category['summary']['total_billed'] ?? 0),
-                            'remaining' => $categoryRemaining,
-                            'journal_date' => '-',
-                            'last_updated' => '-',
-                            'payment_status' => '-',
-                            'raw' => [],
-                        ];
-                    }
-
-                    $categoryGroups[] = [
-                        'category_name' => $categoryName,
-                        'summary' => $category['summary'] ?? [],
-                        'total_remaining' => $categoryRemaining,
-                        'items' => $categoryItems,
-                        'raw' => $category,
-                    ];
-                }
-
-                $periodRemaining = $this->summaryDebt($period['summary'] ?? [], 'total_remaining', collect($categoryGroups)->sum('total_remaining'));
-                $periodBilled = (float) ($period['summary']['total_paid'] ?? collect($periodRows)->sum('amount'));
-                $periodPaid = (float) ($period['summary']['total_billed'] ?? collect($periodRows)->sum('paid'));
-
-                $periods[] = [
-                    'period_id' => (string) ($period['period_id'] ?? '-'),
-                    'kelas_info' => $period['kelas_info'] ?? '-',
-                    'summary' => $period['summary'] ?? [],
-                    'total_billed' => $periodBilled,
-                    'total_paid' => $periodPaid,
-                    'total_remaining' => $periodRemaining,
-                    'categories' => $categoryGroups,
-                    'items' => $periodRows,
-                    'raw' => $period,
-                ];
-            }
-        }
-
-        if ($periods !== []) {
-            return $periods;
-        }
-
-        $fallbackRows = $this->extractBillRows($payload);
-        if ($fallbackRows === []) {
-            return [];
-        }
-
-        return collect($fallbackRows)
-            ->groupBy('period')
-            ->map(fn($rows, $period) => [
-                'period_id' => (string) $period,
-                'kelas_info' => '-',
-                'summary' => [
-                    'total_billed' => $rows->sum('amount'),
-                    'total_paid' => $rows->sum('paid'),
-                    'total_remaining' => $rows->sum('remaining'),
-                ],
-                'total_billed' => $rows->sum('amount'),
-                'total_paid' => $rows->sum('paid'),
-                'total_remaining' => $rows->sum('remaining'),
-                'categories' => [],
-                'items' => $rows->values()->all(),
-                'raw' => [],
-            ])
-            ->values()
-            ->all();
-    }
-
-    private function unpaidPeriods(array $periods): array
-    {
-        return collect($periods)
-            ->filter(fn($period) => (float) ($period['total_remaining'] ?? 0) > 0)
-            ->map(function ($period) {
-                $period['categories'] = collect($period['categories'] ?? [])
-                    ->filter(fn($category) => abs((float) ($category['summary']['total_remaining'] ?? collect($category['items'] ?? [])->sum('remaining'))) > 0)
-                    ->map(function ($category) {
-                        $category['items'] = collect($category['items'] ?? [])
-                            ->filter(fn($item) => (float) ($item['remaining'] ?? 0) > 0)
-                            ->values()
-                            ->all();
-
-                        return $category;
-                    })
-                    ->values()
-                    ->all();
-
-                $period['items'] = collect($period['items'] ?? [])
-                    ->filter(fn($item) => (float) ($item['remaining'] ?? 0) > 0)
-                    ->values()
-                    ->all();
-
-                return $period;
-            })
-            ->values()
-            ->all();
-    }
-
+    /**
+     * Rekap status pembayaran per tingkat dan per kelas (untuk halaman Rekom).
+     */
     private function paymentSummaryByLevel(): array
     {
-        return $this->studentQuery()
+        $students = $this->studentQuery()
             ->select('siswa.id', 'siswa.idyayasan', 'siswa.nama', DB::raw('sta.status_pembayaran as status_pembayaran'), 'kelas.tingkat', 'kelas.nama_kelas')
             ->orderBy('kelas.tingkat')
             ->orderBy('kelas.nama_kelas')
             ->orderBy('siswa.nama')
-            ->get()
-            ->groupBy(fn($student) => $student->tingkat ?: 'Tanpa Tingkat')
+            ->get();
+
+        // Timpa status DB dengan status gerbang ujian agar rekap Lunas/Belum
+        // memakai definisi yang sama dengan "Sisa Tunggakan Ujian".
+        $statusMap = $this->ujianStatusForStudents($students);
+        $students = $students->map(function ($student) use ($statusMap) {
+            $student->status_pembayaran = $statusMap[$student->idyayasan]['status'] ?? $student->status_pembayaran;
+
+            return $student;
+        });
+
+        return $students
+            ->groupBy(fn ($student) => $student->tingkat ?: 'Tanpa Tingkat')
             ->map(function ($levelStudents, $level) {
                 return [
                     'tingkat' => $level,
                     'total' => $levelStudents->count(),
-                    'lunas' => $levelStudents->where('status_pembayaran', 'Lunas')->count(),
-                    'belum' => $levelStudents->where('status_pembayaran', '!=', 'Lunas')->count(),
+                    'lunas' => $levelStudents->where('status_pembayaran', PembayaranViewService::STATUS_LUNAS)->count(),
+                    'belum' => $levelStudents->where('status_pembayaran', '!=', PembayaranViewService::STATUS_LUNAS)->count(),
                     'classes' => $levelStudents
-                        ->groupBy(fn($student) => $student->nama_kelas ?: 'Tanpa Kelas')
-                        ->map(fn($classStudents, $className) => [
+                        ->groupBy(fn ($student) => $student->nama_kelas ?: 'Tanpa Kelas')
+                        ->map(fn ($classStudents, $className) => [
                             'kelas' => $className,
                             'total' => $classStudents->count(),
-                            'lunas' => $classStudents->where('status_pembayaran', 'Lunas')->count(),
-                            'belum' => $classStudents->where('status_pembayaran', '!=', 'Lunas')->count(),
+                            'lunas' => $classStudents->where('status_pembayaran', PembayaranViewService::STATUS_LUNAS)->count(),
+                            'belum' => $classStudents->where('status_pembayaran', '!=', PembayaranViewService::STATUS_LUNAS)->count(),
                             'students' => $classStudents->values(),
                         ])
                         ->values(),
@@ -1568,111 +1485,46 @@ MD;
             ->all();
     }
 
-    private function extractBillRows(array $payload): array
+    /**
+     * Base URL API akademik bersama. Setting aplikasi menang atas .env.
+     */
+    public function paymentApiBaseUrl(): string
     {
-        $rows = [];
-        $this->walkPayload($payload, function (array $item) use (&$rows) {
-            $remaining = $this->firstNumericByKeys($item, ['total_remaining', 'remaining_balance', 'remaining', 'sisa', 'sisa_tagihan', 'nominal_sisa']);
-            $amount = $this->firstNumericByKeys($item, ['total_paid', 'amount_paid', 'paid', 'total_bill', 'total_tagihan', 'bill', 'amount', 'nominal', 'tagihan']);
-            $paid = $this->firstNumericByKeys($item, ['total_billed', 'amount_billed', 'billed', 'total_bayar']);
+        $base = $this->setting('payment_api_base_url')
+            ?: env('PAYMENT_API_BASE_URL')
+            ?: env('API_AKADEMIK_BASE_URL')
+            ?: 'https://apiakademik.daruttaqwa.or.id/api';
 
-            if ($remaining === null && $amount === null) {
-                return;
-            }
-
-            $rows[] = [
-                'name' => $this->firstStringByKeys($item, ['name', 'nama', 'description', 'keterangan', 'jenis', 'title']) ?? 'Tagihan',
-                'period' => $this->firstStringByKeys($item, ['period', 'periode', 'bulan', 'tahun']) ?? '-',
-                'amount' => (float) ($amount ?? 0),
-                'paid' => (float) ($paid ?? 0),
-                'remaining' => (float) ($remaining ?? 0),
-                'unit' => $this->firstStringByKeys($item, ['unit_name', 'unit_id']) ?? '-',
-                'kelas_info' => '-',
-                'journal_date' => $this->firstStringByKeys($item, ['journal_date', 'tanggal']) ?? '-',
-            ];
-        });
-
-        return collect($rows)
-            ->filter(fn($row) => $row['remaining'] > 0 || $row['amount'] > 0)
-            ->unique(fn($row) => $row['name'] . '|' . $row['period'] . '|' . $row['amount'] . '|' . $row['remaining'])
-            ->values()
-            ->all();
+        return rtrim((string) $base, '/');
     }
 
-    private function walkPayload(mixed $payload, callable $callback): void
+    private function pembayaranService(): PembayaranViewService
     {
-        if (!is_array($payload)) {
-            return;
-        }
-
-        if (array_is_list($payload)) {
-            foreach ($payload as $item) {
-                $this->walkPayload($item, $callback);
-            }
-
-            return;
-        }
-
-        $callback($payload);
-
-        foreach ($payload as $value) {
-            $this->walkPayload($value, $callback);
-        }
+        return app(PembayaranViewService::class);
     }
 
-    private function firstNumericByKeys(array $payload, array $keys): ?float
+    /**
+     * Detail pembayaran siswa dari API akademik.
+     *
+     * Meminta penanda ujian (`?ujian=1`) supaya daftar item bisa menampilkan
+     * `persen_ujian` dan status terpenuhi untuk gerbang ujian.
+     *
+     * @return array{data: array<mixed>, error: string|null}
+     */
+    private function payment(string $idyayasan): array
     {
-        foreach ($keys as $key) {
-            if (isset($payload[$key]) && is_numeric($payload[$key])) {
-                return (float) $payload[$key];
-            }
-        }
-
-        return null;
+        return $this->pembayaranService()->detail($idyayasan, ['ujian' => 1]);
     }
 
-    private function firstNumericByKeysDeep(array $payload, array $keys): ?float
+    /**
+     * Susun tampilan pembayaran untuk blade dari respons API akademik.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function paymentViewModel(array $payload): array
     {
-        $found = null;
-        $this->walkPayload($payload, function (array $item) use ($keys, &$found) {
-            if ($found !== null) {
-                return;
-            }
-
-            $found = $this->firstNumericByKeys($item, $keys);
-        });
-
-        return $found;
-    }
-
-    private function sumDebtByKeyDeep(array $payload, string $key): float
-    {
-        $sum = 0.0;
-        $this->walkPayload($payload, function (array $item) use ($key, &$sum) {
-            if (isset($item[$key]) && is_numeric($item[$key])) {
-                $sum += abs((float) $item[$key]);
-            }
-        });
-
-        return $sum;
-    }
-
-    private function summaryDebt(array $summary, string $key, float|int $fallback = 0): float
-    {
-        return array_key_exists($key, $summary) && is_numeric($summary[$key])
-            ? abs((float) $summary[$key])
-            : (float) $fallback;
-    }
-
-    private function firstStringByKeys(array $payload, array $keys): ?string
-    {
-        foreach ($keys as $key) {
-            if (!empty($payload[$key]) && is_scalar($payload[$key])) {
-                return (string) $payload[$key];
-            }
-        }
-
-        return null;
+        return $this->pembayaranService()->viewModel($payload);
     }
 
     private function romanMonth(int $month): string

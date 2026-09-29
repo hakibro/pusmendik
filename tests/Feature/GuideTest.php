@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -58,7 +58,7 @@ class GuideTest extends TestCase
         $guide = DB::table('guides')->where('slug', 'import-nilai')->first();
         $this->assertNotNull($guide);
 
-        $this->withSession($session)->put('/settings/panduan/' . $guide->id, [
+        $this->withSession($session)->put('/settings/panduan/'.$guide->id, [
             'title' => 'Panduan Import Nilai Revisi',
             'slug' => 'import-nilai-revisi',
             'group' => 'panitia',
@@ -73,7 +73,7 @@ class GuideTest extends TestCase
             'title' => 'Panduan Import Nilai Revisi',
         ]);
 
-        $this->withSession($session)->delete('/settings/panduan/' . $guide->id)
+        $this->withSession($session)->delete('/settings/panduan/'.$guide->id)
             ->assertRedirect('/settings/panduan');
 
         $this->assertDatabaseMissing('guides', ['id' => $guide->id]);
@@ -104,11 +104,11 @@ class GuideTest extends TestCase
         $guide = DB::table('guides')->where('slug', 'naskah')->first();
 
         $this->withSession(['data_user' => ['id' => 1, 'name' => 'Tester']])
-            ->post('/settings/panduan/' . $guide->id . '/attachments', [
+            ->post('/settings/panduan/'.$guide->id.'/attachments', [
                 'title' => 'Template Import Soal',
                 'attachment' => UploadedFile::fake()->create('template-import-soal.xlsx', 20, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
             ])
-            ->assertRedirect('/settings/panduan?guide=' . $guide->id);
+            ->assertRedirect('/settings/panduan?guide='.$guide->id);
 
         $attachment = DB::table('guide_attachments')->where('guide_id', $guide->id)->first();
         $this->assertNotNull($attachment);
@@ -117,7 +117,7 @@ class GuideTest extends TestCase
         $this->get('/panduan?group=panitia&role=naskah')
             ->assertOk()
             ->assertSee('Template Import Soal')
-            ->assertSee('/storage/' . $attachment->file_path);
+            ->assertSee('/storage/'.$attachment->file_path);
     }
 
     public function test_attachment_upload_rejects_unsupported_files(): void
@@ -127,12 +127,12 @@ class GuideTest extends TestCase
         $guide = DB::table('guides')->where('slug', 'naskah')->first();
 
         $this->withSession(['data_user' => ['id' => 1, 'name' => 'Tester']])
-            ->from('/settings/panduan?guide=' . $guide->id)
-            ->post('/settings/panduan/' . $guide->id . '/attachments', [
+            ->from('/settings/panduan?guide='.$guide->id)
+            ->post('/settings/panduan/'.$guide->id.'/attachments', [
                 'title' => 'File Script',
                 'attachment' => UploadedFile::fake()->create('script.exe', 5, 'application/octet-stream'),
             ])
-            ->assertRedirect('/settings/panduan?guide=' . $guide->id)
+            ->assertRedirect('/settings/panduan?guide='.$guide->id)
             ->assertSessionHasErrors('attachment');
     }
 }

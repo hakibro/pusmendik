@@ -78,6 +78,8 @@
                                                             $studentItem->status_pembayaran === 'Lunas',
                                                         'bg-rose-50 text-rose-700' => $studentItem->status_pembayaran !== 'Lunas',
                                                     ])>{{ $studentItem->status_pembayaran }}</span>
+                                                <span class="ml-1 text-[10px] font-semibold text-slate-400">administrasi
+                                                    ujian</span>
                                             </div>
                                         @endforeach
                                     </div>
@@ -119,7 +121,7 @@
                     @endforeach
                 </select>
             </label>
-            <label class="grid gap-1 text-xs font-black uppercase tracking-wide text-slate-500">Status Pembayaran
+            <label class="grid gap-1 text-xs font-black uppercase tracking-wide text-slate-500">Administrasi Ujian
                 <select name="status_pembayaran" id="filter-status-pembayaran"
                     class="min-h-10 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold normal-case tracking-normal text-slate-800 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
                     <option value="">Semua</option>
@@ -175,7 +177,7 @@
                         <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Kelas
                         </th>
                         <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">
-                            Pembayaran
+                            Administrasi Ujian
                         </th>
                         <th class="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">Rekom
                         </th>
@@ -189,6 +191,7 @@
                 <tbody id="table-body" class="divide-y divide-slate-100">
                     @forelse($students as $student)
                         @php($statusRekom = $student->rekomendasi ?: 'tidak')
+                        @php($uStatus = $ujianStatus[$student->idyayasan]['status'] ?? $student->status_pembayaran)
                         <tr class="transition hover:bg-teal-50/40">
                             <td class="whitespace-nowrap px-4 py-4 font-black text-slate-950">{{ $student->idyayasan }}
                             </td>
@@ -197,9 +200,9 @@
                             <td class="whitespace-nowrap px-4 py-4"><span
                                     @class([
                                         'rounded-full px-3 py-1 text-xs font-black',
-                                        'bg-emerald-50 text-emerald-700' => $student->status_pembayaran === 'Lunas',
-                                        'bg-rose-50 text-rose-700' => $student->status_pembayaran !== 'Lunas',
-                                    ])>{{ $student->status_pembayaran }}</span></td>
+                                        'bg-emerald-50 text-emerald-700' => $uStatus === 'Lunas',
+                                        'bg-rose-50 text-rose-700' => $uStatus !== 'Lunas',
+                                    ])>{{ $uStatus }}</span></td>
                             <td class="whitespace-nowrap px-4 py-4"><span
                                     @class([
                                         'rounded-full px-3 py-1 text-xs font-black',
@@ -230,6 +233,7 @@
     <div id="card-container" class="block space-y-3 lg:hidden">
         @forelse($students as $student)
             @php($statusRekom = $student->rekomendasi ?: 'tidak')
+            @php($uStatus = $ujianStatus[$student->idyayasan]['status'] ?? $student->status_pembayaran)
             <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div class="flex items-start justify-between gap-3">
                     <div>
@@ -246,12 +250,12 @@
                         <div class="font-semibold text-slate-800">{{ $student->nama_kelas }}</div>
                     </div>
                     <div>
-                        <span class="text-xs font-semibold text-slate-400">Pembayaran</span>
+                        <span class="text-xs font-semibold text-slate-400">Administrasi Ujian</span>
                         <div><span @class([
                             'mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-black',
-                            'bg-emerald-50 text-emerald-700' => $student->status_pembayaran === 'Lunas',
-                            'bg-rose-50 text-rose-700' => $student->status_pembayaran !== 'Lunas',
-                        ])>{{ $student->status_pembayaran }}</span></div>
+                            'bg-emerald-50 text-emerald-700' => $uStatus === 'Lunas',
+                            'bg-rose-50 text-rose-700' => $uStatus !== 'Lunas',
+                        ])>{{ $uStatus }}</span></div>
                     </div>
                     <div>
                         <span class="text-xs font-semibold text-slate-400">Rekom</span>

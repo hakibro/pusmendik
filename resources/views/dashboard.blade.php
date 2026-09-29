@@ -24,9 +24,9 @@
                         <input id="home-student-search" name="q" autocomplete="off"
                             class="min-h-12 rounded-2xl border border-transparent bg-white px-4 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
                             placeholder="Ketik nama atau ID Yayasan siswa">
-                        <button disabled
-                            class="min-h-12 rounded-2xl bg-slate-200 px-6 text-sm font-black text-slate-500">Cek Status
-                            Pembayaran</button>
+                        <button type="submit" id="home-student-submit" disabled
+                            class="min-h-12 rounded-2xl bg-slate-950 px-6 text-sm font-black text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:hover:bg-slate-200">Cek
+                            Status Pembayaran</button>
                     </form>
                     <div id="home-student-results"
                         class="absolute left-0 right-0 top-full z-[90] mt-2 hidden max-h-80 overflow-auto rounded-3xl border border-slate-200 bg-white text-left text-slate-900 shadow-2xl shadow-slate-900/30">
@@ -117,7 +117,26 @@
         (() => {
             const input = document.getElementById('home-student-search');
             const results = document.getElementById('home-student-results');
+            const submit = document.getElementById('home-student-submit');
             if (!input || !results) return;
+
+            // Tombol submit baru aktif saat ada kata kunci (min. 2 karakter).
+            const syncSubmit = () => {
+                if (submit) submit.disabled = input.value.trim().length < 2;
+            };
+            input.addEventListener('input', syncSubmit);
+            syncSubmit();
+
+            // Di layar sempit dropdown `absolute` jatuh di bawah lipatan layar,
+            // jadi tampilkan sebagai blok biasa di dalam alur dokumen.
+            const syncResultsPosition = () => {
+                const stacked = window.matchMedia('(max-width: 1023px)').matches;
+                results.classList.toggle('static', stacked);
+                results.classList.toggle('mt-2', stacked);
+                results.classList.toggle('absolute', !stacked);
+            };
+            syncResultsPosition();
+            window.addEventListener('resize', syncResultsPosition);
 
             let controller;
             input.addEventListener('input', async () => {
@@ -144,6 +163,14 @@
             `).join('') :
                     '<div class="px-4 py-3 text-sm font-semibold text-slate-500">Siswa tidak ditemukan.</div>';
                 results.classList.remove('hidden');
+                syncResultsPosition();
+            });
+
+            // Enter di input langsung mengirim form (pola sama dengan halaman Rekom).
+            input.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                if (input.value.trim().length >= 2) input.form?.submit();
             });
 
             document.addEventListener('click', (event) => {

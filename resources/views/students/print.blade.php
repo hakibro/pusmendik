@@ -164,12 +164,18 @@
         $nominalRekom = (float) ($handler->nominal_rekom ?? 0);
         $manualNominal = number_format($nominalRekom, 0, ',', '.');
         $printPeriods = $paymentView['unpaid_periods'] ?? [];
+        // Sisa tunggakan syarat ujian (kekurangan per pos), fallback ke tunggakan jatuh tempo (Ngalah Mobile).
+        $sisaUjian = (float) ($paymentView['sisa_tunggakan'] ?? $paymentView['total_remaining'] ?? 0);
+        $sumberSisa = $paymentView['sisa_tunggakan_sumber'] ?? 'jatuh_tempo';
+        $fokusUjian = collect($paymentView['fokus_ujian'] ?? []);
+        $statusCetak = $statusAdmin ?? $student->status_pembayaran;
         $text2 = str_replace(
-            ['{nominal_rekom}', '{total_tagihan}', '{total_tunggakan}', '{tanggal_batas}', '{batas_hari}'],
+            ['{nominal_rekom}', '{total_tagihan}', '{total_tunggakan}', '{sisa_ujian}', '{tanggal_batas}', '{batas_hari}'],
             [
                 $manualNominal,
-                number_format($paymentView['total_bill'], 0, ',', '.'),
-                number_format($paymentView['total_remaining'], 0, ',', '.'),
+                number_format($paymentView['total_bill'] ?? 0, 0, ',', '.'),
+                number_format($paymentView['total_remaining'] ?? 0, 0, ',', '.'),
+                number_format($sisaUjian, 0, ',', '.'),
                 $letter['deadline_date']->translatedFormat('d F Y'),
                 $letter['deadline_days'] . ' hari',
             ],
@@ -202,8 +208,8 @@
         <div>: {{ $student->idyayasan }}</div>
         <div>Kelas</div>
         <div>: {{ $student->nama_kelas }}</div>
-        <div>Status Pembayaran</div>
-        <div>: {{ $student->status_pembayaran }}</div>
+        <div>Administrasi Ujian</div>
+        <div>: <strong>{{ $statusCetak }}</strong></div>
         <div>Nominal Dibayar</div>
         <div>: Rp {{ $manualNominal }}</div>
     </div>
@@ -221,22 +227,69 @@
         <tbody>
             <tr>
                 <td>Total Tagihan</td>
-                <td class="right">Rp {{ number_format($paymentView['total_bill'], 0, ',', '.') }}</td>
+                <td class="right">Rp {{ number_format($paymentView['total_bill'] ?? 0, 0, ',', '.') }}</td>
             </tr>
             <tr>
                 <td>Total Dibayar</td>
-                <td class="right">Rp {{ number_format($paymentView['total_paid'], 0, ',', '.') }}</td>
+                <td class="right">Rp {{ number_format($paymentView['total_paid'] ?? 0, 0, ',', '.') }}</td>
             </tr>
             <tr>
-                <td>Total Sisa Tunggakan</td>
-                <td class="right">Rp {{ number_format($paymentView['total_remaining'], 0, ',', '.') }}</td>
+                <th>Sisa Tunggakan Ujian{{ $sumberSisa === 'syarat_ujian' ? ' (syarat per pos)' : '' }}</th>
+                <th class="right">Rp {{ number_format($sisaUjian, 0, ',', '.') }}</th>
             </tr>
+            @if($sumberSisa === 'syarat_ujian')
+                <tr>
+                    <td>Sisa Tunggakan Jatuh Tempo (Ngalah Mobile)</td>
+                    <td class="right">Rp {{ number_format($paymentView['total_remaining'] ?? 0, 0, ',', '.') }}</td>
+                </tr>
+            @endif
             <tr>
                 <th>Nominal Dibayar pada Surat Ini</th>
                 <th class="right">Rp {{ $manualNominal }}</th>
             </tr>
         </tbody>
     </table>
+
+    @if($fokusUjian->isNotEmpty())
+        <h3 style="margin:16px 0 0;">Rincian Syarat Ujian per Pos</h3>
+        <p style="margin:4px 0 0; font-size:11px; color:#475569;">Pos yang menentukan boleh/tidaknya mengikuti ujian.
+            Wajib = tagihan × persen; Kurang = kekurangan agar syarat terpenuhi.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:32px">No</th>
+                    <th>Pos</th>
+                    <th>Periode</th>
+                    <th class="right">Persen</th>
+                    <th class="right">Tagihan</th>
+                    <th class="right">Wajib</th>
+                    <th class="right">Dibayar</th>
+                    <th class="right">Kurang</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($fokusUjian as $pos)
+                    <tr>
+                        <td>{{ $loop->iteration }}</td>
+                        <td>{{ $pos['judul'] }}</td>
+                        <td>{{ $pos['periode'] }}</td>
+                        <td class="right">{{ $pos['persen'] }}%</td>
+                        <td class="right">Rp {{ number_format($pos['tagihan'], 0, ',', '.') }}</td>
+                        <td class="right">Rp {{ number_format($pos['wajib_bayar'], 0, ',', '.') }}</td>
+                        <td class="right">Rp {{ number_format($pos['dibayar'], 0, ',', '.') }}</td>
+                        <td class="right">Rp {{ number_format($pos['kekurangan'], 0, ',', '.') }}</td>
+                        <td>{{ $pos['terpenuhi'] ? 'Terpenuhi' : 'Belum' }}</td>
+                    </tr>
+                @endforeach
+                <tr>
+                    <th colspan="7" class="right">Total Sisa Tunggakan Ujian</th>
+                    <th class="right">Rp {{ number_format($sisaUjian, 0, ',', '.') }}</th>
+                    <th></th>
+                </tr>
+            </tbody>
+        </table>
+    @endif
 
     <p>{!! $letter['text_3_html'] !!}</p>
 
@@ -278,10 +331,10 @@
                             <td>{{ $category['category_name'] }}</td>
                             <td>-</td>
                             <td class="right">Rp
-                                {{ number_format((float) ($category['summary']['total_paid'] ?? 0), 0, ',', '.') }}
+                                {{ number_format((float) ($category['summary']['total_bill'] ?? 0), 0, ',', '.') }}
                             </td>
                             <td class="right">Rp
-                                {{ number_format((float) ($category['summary']['total_billed'] ?? 0), 0, ',', '.') }}
+                                {{ number_format((float) ($category['summary']['total_paid'] ?? 0), 0, ',', '.') }}
                             </td>
                             <td class="right">Rp
                                 {{ number_format(abs((float) ($category['summary']['total_remaining'] ?? 0)), 0, ',', '.') }}
