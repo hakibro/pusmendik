@@ -1,18 +1,13 @@
 # ROADMAP — Pusmendik
 
-> **Peta besar project.** Status detail & kerjaan harian ada di **Kanban Hermes**:
-> `hermes kanban --board pusmendik list`
+> **Peta besar project.** Status detail & kerjaan harian dikelola **terpisah**
+> dari file ini — di antrean kerja yang dipakai saat itu (bebas, tidak terikat
+> produk tertentu).
 >
 > File ini **jarang berubah** — hanya untuk konteks AI & arah jangka panjang.
-> Jangan salin status dari Kanban ke sini; cukup tulis nomor task-nya.
+> Jangan salin status kerja harian ke sini.
 
-- **Board Kanban:** `pusmendik`
 - **Repo:** `https://github.com/hakibro/pusmendik.git`
-- **Project Hermes:** `pusmendik`
-
-<!-- kanban-board:begin -->
-> Status baris di atas dari sudut **Hermes**: board `pusmendik` sudah dibuat, project Hermes belum (tidak ada profil per project).
-<!-- kanban-board:end -->
 
 ---
 
