@@ -35,7 +35,7 @@ class PusmendikController extends Controller
             $status = $this->pembayaranService()->statusUjianSiswa($idyayasan, $map, $fallbackDb);
 
             return $status['status'] ?? $fallbackDb;
-        } catch (\Throwable $exception) {
+        } catch (\Throwable) {
             // Jangan sampai API yang mati mematahkan halaman; pakai nilai DB apa adanya.
             return $fallbackDb;
         }
@@ -195,7 +195,7 @@ class PusmendikController extends Controller
 
         try {
             $gate = $this->pembayaranService()->statusUjianMap();
-        } catch (\Throwable $exception) {
+        } catch (\Throwable) {
             $gate = [];
         }
 
@@ -532,7 +532,7 @@ class PusmendikController extends Controller
             ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
             ->select('siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'sr.nama_sesi', 'sr.waktu_mulai', 'sr.waktu_selesai', 'ruangan.nama_ruangan', 'srs.status_kehadiran')
             ->whereNull('siswa.deleted_at')
-            ->where('sr.sumber', 'sumber')
+            ->where('sr.sumber', 'sumber')->where('sr.paket_ujian_id', $activeExamPackageId)
             ->when($activeAcademicYearId, fn ($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId));
 
         if (mb_strlen($q) >= 2) {
@@ -680,7 +680,7 @@ class PusmendikController extends Controller
         $analysisRows = (clone $query)->get();
         $total = $analysisRows->count();
         $finished = $analysisRows->whereIn('status', ['selesai', 'finished', 'final'])->count();
-        $average = $total ? round($analysisRows->avg('nilai'), 2) : 0;
+        $average = $total ? round((float) $analysisRows->avg('nilai'), 2) : 0;
         $highest = $total ? round($analysisRows->max('nilai'), 2) : 0;
         $lowest = $total ? round($analysisRows->min('nilai'), 2) : 0;
         $passed = $analysisRows->where('lulus', 1)->count();
@@ -960,6 +960,11 @@ class PusmendikController extends Controller
         ]);
 
         $path = $data['image']->store('guides/images', 'public');
+
+        if ($path === false) {
+            return back()->with('error', 'Gagal menyimpan gambar. Silakan coba lagi.');
+        }
+
         $url = $this->publicStorageUrl($path);
         $alt = $data['alt'] ?: pathinfo($data['image']->getClientOriginalName(), PATHINFO_FILENAME);
 
@@ -974,6 +979,11 @@ class PusmendikController extends Controller
         ]);
 
         $path = $data['image']->store('guides/images', 'public');
+
+        if ($path === false) {
+            return response()->json(['success' => false, 'error' => 'Gagal menyimpan gambar. Silakan coba lagi.'], 422);
+        }
+
         $url = $this->publicStorageUrl($path);
         $alt = $data['alt'] ?: pathinfo($data['image']->getClientOriginalName(), PATHINFO_FILENAME);
         $markdown = '!['.$alt.']('.$url.')';
@@ -1099,7 +1109,7 @@ class PusmendikController extends Controller
         $used = [];
 
         return collect($matches)->map(function ($match) use (&$used) {
-            $title = trim(preg_replace('/[`*_~\[\]\(\)#>]/', '', $match[2]));
+            $title = trim((string) preg_replace('/[`*_~\[\]\(\)#>]/', '', $match[2]));
             $base = Str::slug($title) ?: 'bagian';
             $slug = $base;
             $counter = 2;
@@ -1491,8 +1501,7 @@ MD;
     public function paymentApiBaseUrl(): string
     {
         $base = $this->setting('payment_api_base_url')
-            ?: env('PAYMENT_API_BASE_URL')
-            ?: env('API_AKADEMIK_BASE_URL')
+            ?: config('services.apiakademik.base_url')
             ?: 'https://apiakademik.daruttaqwa.or.id/api';
 
         return rtrim((string) $base, '/');
@@ -1535,9 +1544,9 @@ MD;
     private function formatLetterText(string $text): string
     {
         $escaped = e($text);
-        $escaped = preg_replace('/\*\*(.*?)\*\*/s', '<strong>$1</strong>', $escaped);
-        $escaped = preg_replace('/\*(.*?)\*/s', '<em>$1</em>', $escaped);
-        $escaped = preg_replace('/==(.*?)==/s', '<mark>$1</mark>', $escaped);
+        $escaped = (string) preg_replace('/\*\*(.*?)\*\*/s', '<strong>$1</strong>', $escaped);
+        $escaped = (string) preg_replace('/\*(.*?)\*/s', '<em>$1</em>', $escaped);
+        $escaped = (string) preg_replace('/==(.*?)==/s', '<mark>$1</mark>', $escaped);
 
         return nl2br($escaped);
     }

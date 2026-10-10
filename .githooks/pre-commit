@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook: rapikan HANYA file PHP yang di-stage (bukan seluruh repo).
+#
+# Sengaja memakai `pint --dirty` agar tidak menyentuh file lain — repo ini bisa
+# punya file lama yang belum sesuai preset, dan memformat semuanya sekaligus
+# akan menghasilkan diff raksasa yang menyulitkan review.
+#
+# Lewati dengan: git commit --no-verify
+
+set -e
+
+# Hanya jalankan bila ada file .php yang di-stage (selain yang dihapus).
+staged_php=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.php$' || true)
+
+if [ -z "$staged_php" ]; then
+    exit 0
+fi
+
+# Jalankan Pint lewat container lerd bila tersedia, kalau tidak langsung.
+if command -v lerd >/dev/null 2>&1; then
+    echo "→ Pint (via lerd) untuk file yang di-stage…"
+    lerd composer exec -- pint --dirty
+else
+    echo "→ Pint (host) untuk file yang di-stage…"
+    ./vendor/bin/pint --dirty
+fi
+
+# Pint sudah mengubah file di working tree; tambahkan perubahannya ke commit.
+git add -u

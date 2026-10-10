@@ -93,7 +93,7 @@ class GuideTest extends TestCase
             ->assertSessionHas('uploaded_image_markdown');
 
         Storage::disk('public')->assertExists(
-            collect(Storage::disk('public')->allFiles('guides/images'))->first()
+            (string) collect(Storage::disk('public')->allFiles('guides/images'))->first()
         );
     }
 

@@ -21,28 +21,28 @@ class ApiAkademikService
 {
     public function baseUrl(): string
     {
+        $fallback = config('services.apiakademik.base_url') ?: 'https://apiakademik.daruttaqwa.or.id/api';
+
         try {
             $setting = app(PusmendikController::class)->paymentApiBaseUrl();
-        } catch (\Throwable $exception) {
-            // Tabel setting belum ada (mis. saat pengujian) — jatuh ke .env.
-            $setting = env('PAYMENT_API_BASE_URL')
-                ?: env('API_AKADEMIK_BASE_URL')
-                ?: 'https://apiakademik.daruttaqwa.or.id/api';
+        } catch (\Throwable) {
+            // Tabel setting belum ada (mis. saat pengujian) — jatuh ke config.
+            $setting = $fallback;
         }
 
-        return rtrim((string) $setting, '/');
+        return rtrim((string) ($setting ?: $fallback), '/');
     }
 
     public function token(): ?string
     {
-        $token = env('API_AKADEMIK_TOKEN');
+        $token = config('services.apiakademik.token');
 
         return $token ? (string) $token : null;
     }
 
     public function timeout(): int
     {
-        return (int) (env('API_AKADEMIK_TIMEOUT') ?: env('PAYMENT_API_TIMEOUT') ?: 30);
+        return (int) (config('services.apiakademik.timeout') ?: 30);
     }
 
     /**
@@ -50,7 +50,7 @@ class ApiAkademikService
      */
     public function idunit(): string
     {
-        return (string) (env('API_AKADEMIK_IDUNIT') ?: '02');
+        return (string) (config('services.apiakademik.idunit') ?: '02');
     }
 
     /**

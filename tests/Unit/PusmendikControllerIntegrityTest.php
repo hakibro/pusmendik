@@ -19,7 +19,7 @@ class PusmendikControllerIntegrityTest extends TestCase
     {
         $class = PusmendikController::class;
         $reflection = new ReflectionClass($class);
-        $source = file_get_contents($reflection->getFileName());
+        $source = (string) file_get_contents((string) $reflection->getFileName());
 
         preg_match_all('/\$this->([A-Za-z_][A-Za-z0-9_]*)\(/', $source, $matches);
         $called = array_values(array_unique($matches[1]));

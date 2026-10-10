@@ -142,7 +142,7 @@ class PembayaranViewService
                     ->map(fn (Collection $categoryRows, $categoryName) => [
                         'category_name' => $categoryName,
                         'summary' => $this->summary($categoryRows, true),
-                        'items' => $categoryRows->map(fn ($row) => $this->bill($row, $categoryName))->values()->all(),
+                        'items' => $categoryRows->map(fn ($row) => $this->bill($row, (string) $categoryName))->values()->all(),
                         'raw' => $categoryRows->values()->all(),
                     ])
                     ->values()

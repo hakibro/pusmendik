@@ -35,4 +35,26 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | API Akademik
+    |--------------------------------------------------------------------------
+    |
+    | Nilai dasar untuk klien apiakademik (`App\Services\ApiAkademikService`).
+    | Diakses lewat `config()` agar tetap benar saat `config:cache` aktif:
+    | `env()` hanya boleh dipanggil di dalam direktori config.
+    |
+    | Base URL sebenarnya yang dipakai runtime tetap menang lewat setting
+    | aplikasi `app_settings.payment_api_base_url` (lihat PusmendikController);
+    | nilai di sini menjadi fallback ketika setting belum diisi.
+    |
+    */
+
+    'apiakademik' => [
+        'base_url' => env('PAYMENT_API_BASE_URL') ?: env('API_AKADEMIK_BASE_URL'),
+        'token' => env('API_AKADEMIK_TOKEN'),
+        'timeout' => env('API_AKADEMIK_TIMEOUT') ?: env('PAYMENT_API_TIMEOUT') ?: 30,
+        'idunit' => env('API_AKADEMIK_IDUNIT') ?: '02',
+    ],
+
 ];

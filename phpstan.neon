@@ -1,0 +1,22 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    # Level 0 dulu: menangkap kelas/fungsi tak dikenal, method yang tidak ada,
+    # dan argumen yang jelas salah. Naikkan bertahap (satu langkah sekali)
+    # setelah jumlah errornya turun — melompat ke level tinggi sekaligus akan
+    # menghasilkan ratusan error dan sulit ditindaklanjuti.
+    level: 0
+
+    paths:
+        - app
+        - tests
+
+    # Jangan analisis kode vendor/node_modules.
+    excludePaths:
+        - vendor/*
+        - node_modules/*
+
+    # Cache hasil analisis ditaruh di storage/framework/cache/phpstan
+    # (sudah di-gitignore lewat storage/framework/cache/.gitignore).
+    tmpDir: storage/framework/cache/phpstan
