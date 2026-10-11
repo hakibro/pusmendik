@@ -273,6 +273,45 @@ class PusmendikController extends Controller
         return back()->with('success', 'Nominal rekom disimpan dan status rekomendasi diset ya.');
     }
 
+    /**
+     * Hapus rekomendasi siswa pada scope aktif (tahun ajaran + paket ujian).
+     *
+     * Filter yang dipakai sama dengan pembacaan (`latestHandlerSubquery`), jadi
+     * yang terhapus persis baris yang tampil di daftar/detail — riwayat pada
+     * tahun ajaran atau paket ujian lain dibiarkan utuh. Status rekomendasi di
+     * `siswa_tahun_ajaran` dikembalikan ke 'tidak' agar tidak ada rekom yang
+     * "menggantung" tanpa handler.
+     */
+    public function deleteRecommendation(int $id)
+    {
+        $student = $this->studentQuery()->where('siswa.id', $id)->firstOrFail();
+        [$scopeTa, $scopePaket] = $this->recommendationScope();
+
+        $deleted = DB::table('recommendation_handlers')
+            ->where('exam_siswa_id', $id)
+            ->when($scopeTa, fn ($query) => $query->where('tahun_ajaran_id', $scopeTa))
+            ->when($scopePaket, fn ($query) => $query->where('paket_ujian_id', $scopePaket))
+            ->delete();
+
+        if ($student->tahun_ajaran_id) {
+            $this->exam()->table('siswa_tahun_ajaran')
+                ->where('siswa_id', $id)
+                ->where('tahun_ajaran_id', $student->tahun_ajaran_id)
+                ->update([
+                    'rekomendasi' => 'tidak',
+                    'catatan' => null,
+                    'updated_at' => now(),
+                ]);
+        }
+
+        return back()->with(
+            'success',
+            $deleted > 0
+                ? 'Rekomendasi dihapus dan status rekomendasi diset tidak.'
+                : 'Tidak ada rekomendasi untuk dihapus; status rekomendasi diset tidak.'
+        );
+    }
+
     public function printRecommendation(int $id)
     {
         $student = $this->studentQuery()->where('siswa.id', $id)->firstOrFail();
@@ -441,6 +480,7 @@ class PusmendikController extends Controller
                     'nominal_rekom' => $student->nominal_rekom,
                     'handled_by_name' => $student->handled_by_name,
                     'url' => route('students.show', $student->id),
+                    'delete_url' => route('students.recommendation.delete', $student->id),
                 ])
         );
     }

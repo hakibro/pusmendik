@@ -27,6 +27,7 @@ Route::middleware('data.user')->group(function () {
     Route::get('/siswa', [PusmendikController::class, 'students'])->name('students.index');
     Route::get('/siswa/{id}', [PusmendikController::class, 'studentDetail'])->name('students.show');
     Route::post('/siswa/{id}/rekomendasi', [PusmendikController::class, 'saveRecommendation'])->name('students.recommendation');
+    Route::delete('/siswa/{id}/rekomendasi', [PusmendikController::class, 'deleteRecommendation'])->name('students.recommendation.delete');
     Route::get('/siswa/{id}/rekomendasi/cetak', [PusmendikController::class, 'printRecommendation'])->name('students.print');
     Route::get('/settings', [PusmendikController::class, 'settings'])->name('settings.index');
     Route::post('/settings', [PusmendikController::class, 'saveSettings'])->name('settings.store');

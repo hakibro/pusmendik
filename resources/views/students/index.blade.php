@@ -214,9 +214,23 @@
                             </td>
                             <td class="whitespace-nowrap px-4 py-4 text-slate-600">
                                 {{ $statusRekom === 'ya' ? $student->handled_by_name ?? '-' : '-' }}</td>
-                            <td class="whitespace-nowrap px-4 py-4 text-right"><a data-api-loading
-                                    class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
-                                    href="{{ route('students.show', $student->id) }}">Detail</a></td>
+                            <td class="whitespace-nowrap px-4 py-4 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <a data-api-loading
+                                        class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
+                                        href="{{ route('students.show', $student->id) }}">Detail</a>
+                                    @if ($statusRekom === 'ya')
+                                        <form method="post"
+                                            action="{{ route('students.recommendation.delete', $student->id) }}"
+                                            onsubmit="return confirm('Hapus rekomendasi siswa ini? Status rekomendasi akan kembali menjadi tidak dan riwayat penanganan pada tahun ajaran + paket ujian aktif akan dihapus.')">
+                                            @csrf
+                                            @method('delete')
+                                            <button
+                                                class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-100">Hapus</button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </td>
                         </tr>
                     @empty
                         <tr>
@@ -359,6 +373,20 @@
                 return div.innerHTML;
             }
 
+            const csrfToken = '{{ csrf_token() }}';
+
+            // Tombol hapus untuk baris hasil live search. Sama dengan tombol
+            // server-rendered: hapus hanya muncul bila status rekom "ya".
+            function deleteForm(statusRekom, url) {
+                if (statusRekom !== 'ya') return '';
+                return '<form method="post" action="' + escapeHtml(url) +
+                    '" onsubmit="return confirm(\'Hapus rekomendasi siswa ini? Status rekomendasi akan kembali menjadi tidak dan riwayat penanganan pada tahun ajaran + paket ujian aktif akan dihapus.\')" class="inline">' +
+                    '<input type="hidden" name="_token" value="' + escapeHtml(csrfToken) + '">' +
+                    '<input type="hidden" name="_method" value="DELETE">' +
+                    '<button class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-100">Hapus</button>' +
+                    '</form>';
+            }
+
             function renderRows(data) {
                 if (!tableBody) return;
 
@@ -397,8 +425,9 @@
                         '</td>' +
                         '<td class="whitespace-nowrap px-4 py-4 text-slate-600">' + escapeHtml(handledBy) +
                         '</td>' +
-                        '<td class="whitespace-nowrap px-4 py-4 text-right"><a class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700" href="' +
-                        escapeHtml(s.url) + '">Detail</a></td>' +
+                        '<td class="whitespace-nowrap px-4 py-4 text-right"><div class="flex items-center justify-end gap-2"><a class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700" href="' +
+                        escapeHtml(s.url) + '">Detail</a>' + deleteForm(statusRekom, s.delete_url) +
+                        '</div></td>' +
                         '</tr>';
                 }).join('');
             }
@@ -447,6 +476,9 @@
                         nominalRekom + '</div></div>' +
                         '<div class="col-span-2"><span class="text-xs font-semibold text-slate-400">Petugas</span><div class="font-semibold text-slate-600">' +
                         escapeHtml(handledBy) + '</div></div>' +
+                        (statusRekom === 'ya' ?
+                            '<div class="col-span-2">' + deleteForm(statusRekom, s.delete_url) + '</div>' :
+                            '') +
                         '</div>' +
                         '</div>';
                 }).join('');

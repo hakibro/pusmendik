@@ -525,6 +525,17 @@
                     class="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-sm shadow-teal-600/20 transition hover:bg-teal-700">Simpan
                     Rekomendasi</button>
             </form>
+            @if ($handler || $student->rekomendasi === 'ya')
+                <form method="post" action="{{ route('students.recommendation.delete', $student->id) }}"
+                    class="mt-3 border-t border-slate-100 pt-4"
+                    onsubmit="return confirm('Hapus rekomendasi siswa ini? Status rekomendasi akan kembali menjadi tidak dan riwayat penanganan pada tahun ajaran + paket ujian aktif akan dihapus.')">
+                    @csrf
+                    @method('delete')
+                    <button
+                        class="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-100">Hapus
+                        Rekomendasi</button>
+                </form>
+            @endif
         </section>
     </div>
     <script>
