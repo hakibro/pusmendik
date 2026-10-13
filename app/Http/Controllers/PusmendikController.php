@@ -109,6 +109,7 @@ class PusmendikController extends Controller
         $activeExamPackageId = $this->activeExamPackageId($activeAcademicYearId);
 
         return view('dashboard', [
+            'apkDownload' => $this->apkDownloadInfo(),
             'stats' => [
                 'siswa' => (clone $students)->count(),
                 'lunas' => (clone $students)->where('sta.status_pembayaran', 'Lunas')->count(),
@@ -1219,7 +1220,99 @@ MD;
     {
         return view('settings.index', [
             'settings' => DB::table('app_settings')->pluck('value', 'key'),
+            'apk' => $this->apkDownloadInfo(),
         ]);
+    }
+
+    public function saveApk(Request $request)
+    {
+        $data = $request->validate([
+            'apk' => ['required', 'file', 'extensions:apk', 'max:512000'], // 500 MB
+        ]);
+
+        $this->deleteApkFile();
+
+        $file = $data['apk'];
+        // `getClientOriginalName()` berasal dari klien; ambil nama dasarnya saja
+        // supaya pemisah path dari unggahan jahat dibuang sebelum ditulis ke disk.
+        $fileName = basename(str_replace('\\', '/', $file->getClientOriginalName()));
+        $path = $file->storeAs('apk', $fileName, 'public');
+
+        foreach ([
+            'apk_file_path' => $path,
+            'apk_file_name' => $fileName,
+            'apk_file_size' => (string) ($file->getSize() ?: 0),
+            'apk_uploaded_at' => now()->toDateTimeString(),
+        ] as $key => $value) {
+            DB::table('app_settings')->updateOrInsert(
+                ['key' => $key],
+                ['value' => $value, 'updated_at' => now(), 'created_at' => now()]
+            );
+        }
+
+        return back()->with('success', 'Aplikasi berhasil diunggah: '.pathinfo($fileName, PATHINFO_FILENAME));
+    }
+
+    public function deleteApk()
+    {
+        $this->deleteApkFile();
+
+        DB::table('app_settings')->whereIn('key', [
+            'apk_file_path',
+            'apk_file_name',
+            'apk_file_size',
+            'apk_uploaded_at',
+        ])->delete();
+
+        return back()->with('success', 'Aplikasi berhasil dihapus.');
+    }
+
+    /**
+     * Hapus file APK yang sedang tersimpan (bila ada) tanpa menyentuh setting.
+     * Dipakai sebelum menimpa dengan upload baru maupun saat menghapus.
+     */
+    private function deleteApkFile(): void
+    {
+        $currentPath = DB::table('app_settings')->where('key', 'apk_file_path')->value('value');
+
+        if ($currentPath) {
+            Storage::disk('public')->delete($currentPath);
+        }
+    }
+
+    /**
+     * Ringkasan APK yang sedang tersimpan untuk ditampilkan di beranda & setting.
+     * Mengembalikan null bila belum pernah diunggah atau filenya sudah hilang.
+     * Nama aplikasi diambil dari nama file yang diunggah (tanpa ekstensi `.apk`).
+     */
+    private function apkDownloadInfo(): ?array
+    {
+        try {
+            $settings = DB::table('app_settings')
+                ->whereIn('key', ['apk_file_path', 'apk_file_name', 'apk_file_size', 'apk_uploaded_at'])
+                ->pluck('value', 'key');
+        } catch (\Throwable) {
+            // Tabel setting belum ada (mis. beranda diakses tanpa migrasi);
+            // jangan sampai mematahkan halaman, cukup sembunyikan banner.
+            return null;
+        }
+
+        $path = $settings['apk_file_path'] ?? null;
+
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        $fileName = $settings['apk_file_name'] ?? basename($path);
+        $uploadedAt = $settings['apk_uploaded_at'] ?? null;
+
+        return [
+            'app_name' => pathinfo($fileName, PATHINFO_FILENAME),
+            'file_name' => $fileName,
+            'size_label' => $this->formatFileSize((int) ($settings['apk_file_size'] ?? 0)),
+            'uploaded_at' => $uploadedAt,
+            'url' => $this->publicStorageUrl($path).($uploadedAt ? '?v='.rawurlencode($uploadedAt) : ''),
+        ];
     }
 
     public function saveSettings(Request $request)

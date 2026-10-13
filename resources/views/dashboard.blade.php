@@ -47,6 +47,39 @@
         </div>
     </section>
 
+    @if ($apkDownload)
+        <section
+            class="relative z-10 mt-8 overflow-hidden rounded-[2rem] border border-teal-200 bg-gradient-to-br from-teal-600 to-teal-800 p-5 text-white shadow-xl shadow-teal-900/20 sm:p-8">
+            <div class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex items-start gap-4">
+                    <span
+                        class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-3xl ring-1 ring-white/20">
+                        📱
+                    </span>
+                    <div>
+                        <div class="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Aplikasi Android Siswa
+                        </div>
+                        <h2 class="mt-1 text-2xl font-black tracking-tight sm:text-3xl">{{ $apkDownload['app_name'] }}
+                        </h2>
+                        <p class="mt-2 max-w-xl text-sm leading-6 text-teal-50">Pasang aplikasi di ponsel Android untuk
+                            mengikuti ujian dan memantau informasi akademik. Ukuran
+                            {{ $apkDownload['size_label'] }}@if ($apkDownload['uploaded_at']), diperbarui
+                                {{ \Illuminate\Support\Carbon::parse($apkDownload['uploaded_at'])->translatedFormat('d M Y') }}@endif.
+                        </p>
+                    </div>
+                </div>
+                <a href="{{ $apkDownload['url'] }}" download
+                    class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-black text-teal-800 shadow-lg shadow-teal-950/20 transition hover:bg-teal-50 sm:w-auto">
+                    <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" />
+                    </svg>
+                    Download APK
+                </a>
+            </div>
+        </section>
+    @endif
+
     <section class="mt-8 grid gap-4 md:grid-cols-4">
         <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div class="text-sm font-black uppercase tracking-wide text-teal-700">Administrasi</div>

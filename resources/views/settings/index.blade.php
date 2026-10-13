@@ -14,6 +14,46 @@
         <a href="{{ route('settings.guides.index') }}" class="w-fit rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-sm shadow-teal-600/20 transition hover:bg-teal-700">Buka Editor</a>
     </div>
 </div>
+
+<div class="mb-5 max-w-3xl rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div>
+            <h2 class="text-xl font-black text-slate-950">Aplikasi Android (APK)</h2>
+            <p class="mt-1 text-sm leading-6 text-slate-500">Unggah file <code class="rounded bg-slate-100 px-1">.apk</code> untuk siswa. Tombol <strong>Download APK</strong> akan muncul otomatis di beranda, dengan nama aplikasi diambil dari nama file yang diunggah.</p>
+        </div>
+    </div>
+
+    @if ($apk)
+        <div class="mt-4 flex flex-col gap-3 rounded-2xl border border-teal-200 bg-teal-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">📱</span>
+                    <span class="truncate text-sm font-black text-slate-950">{{ $apk['app_name'] }}</span>
+                </div>
+                <div class="mt-1 break-all text-xs font-semibold text-teal-800">{{ $apk['file_name'] }} &middot; {{ $apk['size_label'] }}@if ($apk['uploaded_at']) &middot; diunggah {{ \Illuminate\Support\Carbon::parse($apk['uploaded_at'])->translatedFormat('d M Y H:i') }}@endif</div>
+            </div>
+            <form method="post" action="{{ route('settings.apk.delete') }}" class="w-fit shrink-0" onsubmit="return confirm('Hapus aplikasi ini? Tombol download di beranda akan hilang.')">
+                @csrf
+                @method('delete')
+                <button class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-black text-rose-700 transition hover:bg-rose-100">Hapus APK</button>
+            </form>
+        </div>
+    @else
+        <div class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-500">Belum ada aplikasi yang diunggah.</div>
+    @endif
+
+    <form method="post" action="{{ route('settings.apk.store') }}" enctype="multipart/form-data" class="mt-4 grid gap-3">
+        @csrf
+        <label class="grid gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">{{ $apk ? 'Ganti File APK' : 'File APK' }}
+            <input type="file" name="apk" accept=".apk,application/vnd.android.package-archive" required class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition file:mr-3 file:rounded-xl file:border-0 file:bg-teal-600 file:px-4 file:py-2 file:text-xs file:font-black file:text-white focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100">
+        </label>
+        @error('apk')
+            <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{{ $message }}</div>
+        @enderror
+        <div class="text-xs font-semibold text-amber-600">Maksimal 500 MB. Mengunggah file baru akan menggantikan file lama.</div>
+        <button class="w-fit rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-sm shadow-teal-600/20 transition hover:bg-teal-700">{{ $apk ? 'Simpan APK Baru' : 'Unggah APK' }}</button>
+    </form>
+</div>
 <div class="max-w-3xl rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
     <form method="post" action="{{ route('settings.store') }}" class="grid gap-4">
         @csrf
