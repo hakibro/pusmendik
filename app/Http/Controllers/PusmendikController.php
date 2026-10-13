@@ -109,7 +109,8 @@ class PusmendikController extends Controller
         $activeExamPackageId = $this->activeExamPackageId($activeAcademicYearId);
 
         return view('dashboard', [
-            'apkDownload' => $this->apkDownloadInfo(),
+            'apkDownload' => $this->appDownloadInfo('apk'),
+            'exeDownload' => $this->appDownloadInfo('exe'),
             'stats' => [
                 'siswa' => (clone $students)->count(),
                 'lunas' => (clone $students)->where('sta.status_pembayaran', 'Lunas')->count(),
@@ -1220,29 +1221,58 @@ MD;
     {
         return view('settings.index', [
             'settings' => DB::table('app_settings')->pluck('value', 'key'),
-            'apk' => $this->apkDownloadInfo(),
+            'installers' => $this->installers(),
+            'apps' => [
+                'apk' => $this->appDownloadInfo('apk'),
+                'exe' => $this->appDownloadInfo('exe'),
+            ],
         ]);
     }
 
-    public function saveApk(Request $request)
+    /**
+     * Daftar tipe installer yang boleh dikelola petugas. Kunci ini dipakai sebagai
+     * prefix setting (`<key>_file_path`, ...) sekaligus label di halaman Setting.
+     */
+    private function installers(): array
     {
+        return [
+            'apk' => [
+                'label' => 'Aplikasi Android (APK)',
+                'accept' => '.apk,application/vnd.android.package-archive',
+                'description' => 'Unggah file <code class="rounded bg-slate-100 px-1">.apk</code> untuk siswa. Tombol <strong>Download APK</strong> akan muncul otomatis di beranda, dengan nama aplikasi diambil dari nama file yang diunggah.',
+                'empty' => 'Belum ada aplikasi Android yang diunggah.',
+            ],
+            'exe' => [
+                'label' => 'Aplikasi Windows (EXE)',
+                'accept' => '.exe,application/x-msdownload',
+                'description' => 'Unggah file <code class="rounded bg-slate-100 px-1">.exe</code> untuk petugas/pengawas yang menjalankan aplikasi di Windows. Tautan unduh muncul sebagai opsi sekunder (kecil) di bawah tombol APK agar siswa tidak salah unduh.',
+                'empty' => 'Belum ada aplikasi Windows yang diunggah.',
+            ],
+        ];
+    }
+
+    public function saveInstaller(Request $request, string $type)
+    {
+        $installers = $this->installers();
+        abort_unless(isset($installers[$type]), 404);
+
         $data = $request->validate([
-            'apk' => ['required', 'file', 'extensions:apk', 'max:512000'], // 500 MB
+            $type => ['required', 'file', 'extensions:'.$type, 'max:512000'], // 500 MB
         ]);
 
-        $this->deleteApkFile();
+        $this->deleteInstallerFile($type);
 
-        $file = $data['apk'];
+        $file = $data[$type];
         // `getClientOriginalName()` berasal dari klien; ambil nama dasarnya saja
         // supaya pemisah path dari unggahan jahat dibuang sebelum ditulis ke disk.
         $fileName = basename(str_replace('\\', '/', $file->getClientOriginalName()));
-        $path = $file->storeAs('apk', $fileName, 'public');
+        $path = $file->storeAs($type, $fileName, 'public');
 
         foreach ([
-            'apk_file_path' => $path,
-            'apk_file_name' => $fileName,
-            'apk_file_size' => (string) ($file->getSize() ?: 0),
-            'apk_uploaded_at' => now()->toDateTimeString(),
+            $type.'_file_path' => $path,
+            $type.'_file_name' => $fileName,
+            $type.'_file_size' => (string) ($file->getSize() ?: 0),
+            $type.'_uploaded_at' => now()->toDateTimeString(),
         ] as $key => $value) {
             DB::table('app_settings')->updateOrInsert(
                 ['key' => $key],
@@ -1250,30 +1280,32 @@ MD;
             );
         }
 
-        return back()->with('success', 'Aplikasi berhasil diunggah: '.pathinfo($fileName, PATHINFO_FILENAME));
+        return back()->with('success', $installers[$type]['label'].' berhasil diunggah: '.pathinfo($fileName, PATHINFO_FILENAME));
     }
 
-    public function deleteApk()
+    public function deleteInstaller(string $type)
     {
-        $this->deleteApkFile();
+        abort_unless(isset($this->installers()[$type]), 404);
+
+        $this->deleteInstallerFile($type);
 
         DB::table('app_settings')->whereIn('key', [
-            'apk_file_path',
-            'apk_file_name',
-            'apk_file_size',
-            'apk_uploaded_at',
+            $type.'_file_path',
+            $type.'_file_name',
+            $type.'_file_size',
+            $type.'_uploaded_at',
         ])->delete();
 
-        return back()->with('success', 'Aplikasi berhasil dihapus.');
+        return back()->with('success', 'File berhasil dihapus.');
     }
 
     /**
-     * Hapus file APK yang sedang tersimpan (bila ada) tanpa menyentuh setting.
+     * Hapus file installer yang sedang tersimpan (bila ada) tanpa menyentuh setting.
      * Dipakai sebelum menimpa dengan upload baru maupun saat menghapus.
      */
-    private function deleteApkFile(): void
+    private function deleteInstallerFile(string $type): void
     {
-        $currentPath = DB::table('app_settings')->where('key', 'apk_file_path')->value('value');
+        $currentPath = DB::table('app_settings')->where('key', $type.'_file_path')->value('value');
 
         if ($currentPath) {
             Storage::disk('public')->delete($currentPath);
@@ -1281,35 +1313,41 @@ MD;
     }
 
     /**
-     * Ringkasan APK yang sedang tersimpan untuk ditampilkan di beranda & setting.
+     * Ringkasan installer yang sedang tersimpan untuk ditampilkan di beranda & setting.
      * Mengembalikan null bila belum pernah diunggah atau filenya sudah hilang.
-     * Nama aplikasi diambil dari nama file yang diunggah (tanpa ekstensi `.apk`).
+     * Nama aplikasi diambil dari nama file yang diunggah (tanpa ekstensi).
      */
-    private function apkDownloadInfo(): ?array
+    private function appDownloadInfo(string $type): ?array
     {
+        $keys = [
+            $type.'_file_path',
+            $type.'_file_name',
+            $type.'_file_size',
+            $type.'_uploaded_at',
+        ];
+
         try {
-            $settings = DB::table('app_settings')
-                ->whereIn('key', ['apk_file_path', 'apk_file_name', 'apk_file_size', 'apk_uploaded_at'])
-                ->pluck('value', 'key');
+            $settings = DB::table('app_settings')->whereIn('key', $keys)->pluck('value', 'key');
         } catch (\Throwable) {
             // Tabel setting belum ada (mis. beranda diakses tanpa migrasi);
-            // jangan sampai mematahkan halaman, cukup sembunyikan banner.
+            // jangan sampai mematahkan halaman, cukup sembunyikan tautan.
             return null;
         }
 
-        $path = $settings['apk_file_path'] ?? null;
+        $path = $settings[$type.'_file_path'] ?? null;
 
         if (! $path || ! Storage::disk('public')->exists($path)) {
             return null;
         }
 
-        $fileName = $settings['apk_file_name'] ?? basename($path);
-        $uploadedAt = $settings['apk_uploaded_at'] ?? null;
+        $fileName = $settings[$type.'_file_name'] ?? basename($path);
+        $uploadedAt = $settings[$type.'_uploaded_at'] ?? null;
 
         return [
+            'type' => $type,
             'app_name' => pathinfo($fileName, PATHINFO_FILENAME),
             'file_name' => $fileName,
-            'size_label' => $this->formatFileSize((int) ($settings['apk_file_size'] ?? 0)),
+            'size_label' => $this->formatFileSize((int) ($settings[$type.'_file_size'] ?? 0)),
             'uploaded_at' => $uploadedAt,
             'url' => $this->publicStorageUrl($path).($uploadedAt ? '?v='.rawurlencode($uploadedAt) : ''),
         ];

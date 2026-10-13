@@ -31,8 +31,8 @@ Route::middleware('data.user')->group(function () {
     Route::get('/siswa/{id}/rekomendasi/cetak', [PusmendikController::class, 'printRecommendation'])->name('students.print');
     Route::get('/settings', [PusmendikController::class, 'settings'])->name('settings.index');
     Route::post('/settings', [PusmendikController::class, 'saveSettings'])->name('settings.store');
-    Route::post('/settings/apk', [PusmendikController::class, 'saveApk'])->name('settings.apk.store');
-    Route::delete('/settings/apk', [PusmendikController::class, 'deleteApk'])->name('settings.apk.delete');
+    Route::post('/settings/apps/{type}', [PusmendikController::class, 'saveInstaller'])->name('settings.apps.store')->where('type', 'apk|exe');
+    Route::delete('/settings/apps/{type}', [PusmendikController::class, 'deleteInstaller'])->name('settings.apps.delete')->where('type', 'apk|exe');
     Route::get('/settings/panduan', [PusmendikController::class, 'guideEditor'])->name('settings.guides.index');
     Route::post('/settings/panduan', [PusmendikController::class, 'storeGuide'])->name('settings.guides.store');
     Route::post('/settings/panduan/preview', [PusmendikController::class, 'previewGuideMarkdown'])->name('settings.guides.preview');

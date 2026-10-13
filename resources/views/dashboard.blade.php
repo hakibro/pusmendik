@@ -77,6 +77,36 @@
                     Download APK
                 </a>
             </div>
+
+            @if ($exeDownload)
+                {{-- Opsi sekunder: sengaja dibuat kecil & bergaya tenang agar siswa
+                     tidak salah mengunduh installer Windows. --}}
+                <div class="mt-6 border-t border-white/15 pt-4">
+                    <details class="group text-xs">
+                        <summary
+                            class="flex cursor-pointer list-none items-center gap-1.5 font-semibold text-teal-100/70 transition hover:text-teal-50">
+                            <svg class="size-3.5 transition group-open:rotate-90" fill="none" stroke="currentColor"
+                                stroke-width="2.5" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                            </svg>
+                            Untuk petugas: unduh aplikasi versi Windows
+                        </summary>
+                        <div class="mt-2 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
+                            <p class="text-[11px] font-semibold leading-5 text-teal-100/80">Khusus perangkat
+                                <strong class="text-teal-50">komputer/laptop Windows</strong> (petugas & pengawas).
+                                Siswa tidak perlu file ini.</p>
+                            <a href="{{ $exeDownload['url'] }}" download
+                                class="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-[11px] font-bold text-white/90 transition hover:bg-white/20">
+                                <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" />
+                                </svg>
+                                Unduh .exe &middot; {{ $exeDownload['app_name'] }} ({{ $exeDownload['size_label'] }})
+                            </a>
+                        </div>
+                    </details>
+                </div>
+            @endif
         </section>
     @endif
 
