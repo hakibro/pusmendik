@@ -117,7 +117,8 @@ class GuideTest extends TestCase
         $this->get('/panduan?group=panitia&role=naskah')
             ->assertOk()
             ->assertSee('Template Import Soal')
-            ->assertSee('/storage/'.$attachment->file_path);
+            ->assertSee('/panduan/lampiran/'.$attachment->id)
+            ->assertDontSee('/storage/guides/attachments/'.$attachment->file_path);
     }
 
     public function test_attachment_upload_rejects_unsupported_files(): void
@@ -134,5 +135,66 @@ class GuideTest extends TestCase
             ])
             ->assertRedirect('/settings/panduan?guide='.$guide->id)
             ->assertSessionHasErrors('attachment');
+    }
+
+    /**
+     * Lampiran diunduh lewat route khusus agar browser menyimpan berkas dengan
+     * nama yang berarti (judul lampiran + ekstensi asli), bukan nama acak hasil
+     * `store()` (hash + ekstensi).
+     */
+    public function test_lampiran_diunduh_dengan_nama_dari_judul(): void
+    {
+        $this->withoutMiddleware(PreventRequestForgery::class);
+        Storage::fake('public');
+        $guide = DB::table('guides')->where('slug', 'naskah')->first();
+
+        $this->withSession(['data_user' => ['id' => 1, 'name' => 'Tester']])
+            ->post('/settings/panduan/'.$guide->id.'/attachments', [
+                'title' => 'Template Import Soal',
+                'attachment' => UploadedFile::fake()->create('random-hash-name.xlsx', 20, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+            ]);
+
+        $attachment = DB::table('guide_attachments')->where('guide_id', $guide->id)->first();
+
+        $response = $this->get('/panduan/lampiran/'.$attachment->id)->assertOk();
+
+        $this->assertStringContainsString(
+            'Template Import Soal.xlsx',
+            (string) $response->headers->get('content-disposition')
+        );
+    }
+
+    /**
+     * Judul yang mengandung pemisah path tidak boleh bocor ke header unduhan.
+     */
+    public function test_nama_unduhan_membersihkan_pemisah_path(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('guides/attachments/manual.pdf', 'isi');
+
+        $guide = DB::table('guides')->where('slug', 'naskah')->first();
+        $id = DB::table('guide_attachments')->insertGetId([
+            'guide_id' => $guide->id,
+            'title' => '../../etc/passwd',
+            'file_path' => 'guides/attachments/manual.pdf',
+            'file_name' => 'asli.pdf',
+            'mime_type' => 'application/pdf',
+            'file_size' => 3,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->get('/panduan/lampiran/'.$id)->assertOk();
+        $disposition = (string) $response->headers->get('content-disposition');
+
+        $this->assertStringContainsString('.pdf', $disposition);
+        $this->assertStringNotContainsString('..', $disposition);
+    }
+
+    public function test_unduh_lampiran_tidak_ada_mengembalikan_404(): void
+    {
+        Storage::fake('public');
+
+        $this->get('/panduan/lampiran/99999')->assertNotFound();
     }
 }

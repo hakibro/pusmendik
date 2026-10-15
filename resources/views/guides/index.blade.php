@@ -340,12 +340,12 @@
                                     <h3 class="text-lg font-black text-slate-950">Lampiran</h3>
                                     <div class="mt-3 grid gap-2 sm:grid-cols-2" id="attachments-list">
                                         @foreach ($selectedGuide->attachments as $attachment)
-                                            <a href="{{ $attachment->url }}" target="_blank"
+                                            <a href="{{ $attachment->url }}" download="{{ $attachment->download_name }}"
                                                 class="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-teal-200 hover:bg-teal-50">
                                                 <span
                                                     class="block text-sm font-black text-slate-950">{{ $attachment->title }}</span>
                                                 <span
-                                                    class="mt-1 block text-xs font-semibold text-slate-500">{{ $attachment->file_name }}
+                                                    class="mt-1 block text-xs font-semibold text-slate-500">{{ $attachment->download_name }}
                                                     / {{ $attachment->size_label }}</span>
                                             </a>
                                         @endforeach
@@ -542,9 +542,9 @@
                                 let attachmentsHtml = '';
                                 if (data.attachments && data.attachments.length > 0) {
                                     const attachmentsList = data.attachments.map(att => `
-                                        <a href="${att.url}" target="_blank" class="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-teal-200 hover:bg-teal-50">
+                                        <a href="${att.url}" download="${att.download_name}" class="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-teal-200 hover:bg-teal-50">
                                             <span class="block text-sm font-black text-slate-950">${att.title}</span>
-                                            <span class="mt-1 block text-xs font-semibold text-slate-500">${att.file_name} / ${att.size_label}</span>
+                                            <span class="mt-1 block text-xs font-semibold text-slate-500">${att.download_name} / ${att.size_label}</span>
                                         </a>
                                     `).join('');
 

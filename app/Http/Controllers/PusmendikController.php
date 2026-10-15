@@ -884,7 +884,8 @@ class PusmendikController extends Controller
                 'content_html' => $rendered['html'],
                 'toc' => $rendered['toc'],
                 'attachments' => $attachments->get($guide->id, collect())->map(function ($attachment) {
-                    $attachment->url = $this->publicStorageUrl($attachment->file_path);
+                    $attachment->url = $this->guideAttachmentUrl($attachment);
+                    $attachment->download_name = $this->guideAttachmentDownloadName($attachment);
                     $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
 
                     return $attachment;
@@ -949,7 +950,8 @@ class PusmendikController extends Controller
             ->orderBy('title')
             ->get()
             ->map(function ($attachment) {
-                $attachment->url = $this->publicStorageUrl($attachment->file_path);
+                $attachment->url = $this->guideAttachmentUrl($attachment);
+                $attachment->download_name = $this->guideAttachmentDownloadName($attachment);
                 $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
 
                 return $attachment;
@@ -979,6 +981,11 @@ class PusmendikController extends Controller
                 ->orderBy('title')
                 ->get()
                 ->map(function ($attachment) {
+                    // Tautan unduh (tombol) memakai nama file rapi; sedangkan
+                    // snippet markdown tetap memakai URL storage publik supaya
+                    // bisa dipakai inline di dalam isi panduan.
+                    $attachment->download_url = $this->guideAttachmentUrl($attachment);
+                    $attachment->download_name = $this->guideAttachmentDownloadName($attachment);
                     $attachment->url = $this->publicStorageUrl($attachment->file_path);
                     $attachment->markdown = '['.$attachment->title.']('.$attachment->url.')';
                     $attachment->size_label = $this->formatFileSize((int) $attachment->file_size);
@@ -1185,6 +1192,54 @@ class PusmendikController extends Controller
     private function publicStorageUrl(string $path): string
     {
         return '/storage/'.ltrim(str_replace('\\', '/', $path), '/');
+    }
+
+    /**
+     * URL unduhan lampiran panduan. Melewati route khusus (bukan `/storage/...`)
+     * supaya browser menyimpan berkas dengan nama yang berarti, bukan nama acak
+     * hasil `store()` (hash + ekstensi).
+     */
+    private function guideAttachmentUrl(object $attachment): string
+    {
+        return route('guides.attachments.download', $attachment->id);
+    }
+
+    /**
+     * Nama berkas saat lampiran diunduh: judul lampiran + ekstensi aslinya
+     * (mis. judul "Template Import Soal" + `.xlsx` => `Template Import Soal.xlsx`).
+     *
+     * Judul dibersihkan dari pemisah path dan karakter kontrol supaya tidak bisa
+     * keluar dari direktori atau memecah header `Content-Disposition`.
+     */
+    private function guideAttachmentDownloadName(object $attachment): string
+    {
+        $extension = pathinfo((string) ($attachment->file_name ?: $attachment->file_path), PATHINFO_EXTENSION);
+
+        $title = (string) preg_replace('/[\/\\\\\x00-\x1F\x7F]+/', '-', (string) $attachment->title);
+        $title = trim($title, ' .-');
+        $title = Str::limit($title, 120, '');
+
+        if ($title === '') {
+            $title = pathinfo((string) $attachment->file_name, PATHINFO_FILENAME) ?: 'lampiran';
+        }
+
+        return $extension !== '' ? $title.'.'.$extension : $title;
+    }
+
+    /**
+     * Unduh lampiran panduan dengan nama file yang rapi (judul + ekstensi).
+     */
+    public function downloadGuideAttachment(int $attachment)
+    {
+        $item = DB::table('guide_attachments')->where('id', $attachment)->first();
+
+        abort_if($item === null, 404);
+
+        $disk = Storage::disk('public');
+
+        abort_unless($disk->exists($item->file_path), 404);
+
+        return $disk->download($item->file_path, $this->guideAttachmentDownloadName($item));
     }
 
     private function guideTableOfContents(string $markdown): array

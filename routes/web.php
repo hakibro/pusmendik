@@ -21,6 +21,7 @@ Route::get('/kehadiran', [PusmendikController::class, 'attendance'])->name('atte
 Route::get('/hasil-ujian', [PusmendikController::class, 'examResults'])->name('results.index');
 Route::get('/hasil-ujian/download', [PusmendikController::class, 'downloadExamResults'])->name('results.download');
 Route::get('/panduan', [PusmendikController::class, 'guides'])->name('guides.index');
+Route::get('/panduan/lampiran/{attachment}', [PusmendikController::class, 'downloadGuideAttachment'])->name('guides.attachments.download')->whereNumber('attachment');
 Route::get('/panduan/{guide}/ajax', [PusmendikController::class, 'getGuideAjax'])->name('guides.ajax')->whereNumber('guide');
 
 Route::middleware('data.user')->group(function () {

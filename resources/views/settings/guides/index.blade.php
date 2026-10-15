@@ -180,14 +180,19 @@
                                             <div class="mt-1 text-xs font-semibold text-slate-500">
                                                 {{ $attachment->file_name }} / {{ $attachment->size_label }}</div>
                                         </div>
-                                        <form method="post"
-                                            action="{{ route('settings.guides.attachments.delete', $attachment->id) }}"
-                                            onsubmit="return confirm('Hapus lampiran ini?')">
-                                            @csrf
-                                            @method('delete')
-                                            <button
-                                                class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700">Hapus</button>
-                                        </form>
+                                        <div class="flex items-center gap-2">
+                                            <a href="{{ $attachment->download_url }}"
+                                                download="{{ $attachment->download_name }}"
+                                                class="rounded-xl bg-teal-50 px-3 py-2 text-xs font-black text-teal-700">Unduh</a>
+                                            <form method="post"
+                                                action="{{ route('settings.guides.attachments.delete', $attachment->id) }}"
+                                                onsubmit="return confirm('Hapus lampiran ini?')">
+                                                @csrf
+                                                @method('delete')
+                                                <button
+                                                    class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700">Hapus</button>
+                                            </form>
+                                        </div>
                                     </div>
                                     <code
                                         class="mt-2 block overflow-x-auto rounded-xl bg-white p-2 text-xs text-slate-700">{{ $attachment->markdown }}</code>
