@@ -1,9 +1,24 @@
 @extends('layouts.app', ['title' => $title])
 
+@php
+    // Definisi warna status — dipakai seragam oleh kartu server-rendered maupun
+    // kartu hasil live search, supaya kedua jalur tampil identik.
+    $statusKelas = [
+        'lunas' => 'bg-emerald-50 text-emerald-700',
+        'belum' => 'bg-rose-50 text-rose-700',
+        'rekom' => 'bg-teal-50 text-teal-700',
+        'non_rekom' => 'bg-slate-100 text-slate-600',
+        'nominal' => 'bg-amber-50 text-amber-800',
+    ];
+    $chip = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black';
+@endphp
+
 @section('content')
     <div class="mb-4">
         <p class="text-sm font-bold uppercase tracking-[0.2em] text-teal-700">Info Ujian</p>
         <h1 class="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{{ $title }}</h1>
+        <p class="mt-2 text-sm text-slate-500">Daftar siswa per ruangan dan sesi, lengkap dengan status administrasi ujian
+            dan rekomendasinya.</p>
     </div>
 
     <div class="mb-4 space-y-3">
@@ -31,31 +46,68 @@
                 @endforeach
             </div>
         </div>
+
+        {{-- Keterangan warna status --}}
+        <div class="flex flex-wrap items-center gap-1.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm">
+            <span class="mr-1 text-[10px] font-black uppercase tracking-wide text-slate-400">Keterangan</span>
+            <span class="{{ $chip }} {{ $statusKelas['lunas'] }}">Administrasi Lunas</span>
+            <span class="{{ $chip }} {{ $statusKelas['belum'] }}">Administrasi Belum Lunas</span>
+            <span class="{{ $chip }} {{ $statusKelas['rekom'] }}">Rekom Ya</span>
+            <span class="{{ $chip }} {{ $statusKelas['non_rekom'] }}">Rekom Tidak</span>
+            <span class="{{ $chip }} {{ $statusKelas['nominal'] }}">Nominal Rekom</span>
+        </div>
     </div>
 
     <div id="resultsContainer" class="grid gap-3">
         @php($groups = $items->groupBy(fn($item) => ($item->nama_ruangan ?? '-') . '|' . ($item->nama_sesi ?? '-')))
         @forelse($groups as $key => $rows)
             @php([$ruangan, $sesi] = explode('|', $key, 2))
+            @php($lunas = $rows->filter(fn($row) => ($statusMap[$row->idyayasan]['status'] ?? $row->status_pembayaran) === 'Lunas')->count())
+            @php($rekom = $rows->filter(fn($row) => ($row->rekomendasi ?: 'tidak') === 'ya')->count())
             <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div class="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                    <div class="flex items-center gap-2">
-                        <h2 class="text-lg font-black text-slate-950">{{ $ruangan }}</h2>
+                <div class="mb-3 flex flex-col gap-2">
+                    <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-lg font-black text-slate-950">{{ $ruangan }}</h2>
+                            <span
+                                class="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-black text-indigo-700">{{ $sesi }}</span>
+                            <p class="text-xs font-semibold text-slate-500">{{ $rows->first()->waktu_mulai ?? '-' }}
+                                - {{ $rows->first()->waktu_selesai ?? '-' }}</p>
+                        </div>
                         <span
-                            class="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-black text-indigo-700">{{ $sesi }}</span>
-                        <p class="text-xs font-semibold text-slate-500">{{ $rows->first()->waktu_mulai ?? '-' }}
-                            - {{ $rows->first()->waktu_selesai ?? '-' }}</p>
+                            class="w-fit rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">{{ $rows->count() }}
+                            siswa</span>
                     </div>
-                    <span
-                        class="w-fit rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">{{ $rows->count() }}
-                        siswa</span>
+                    <div class="flex flex-wrap gap-1.5">
+                        <span class="{{ $chip }} {{ $statusKelas['lunas'] }}">{{ $lunas }} lunas</span>
+                        <span class="{{ $chip }} {{ $statusKelas['belum'] }}">{{ $rows->count() - $lunas }} belum
+                            lunas</span>
+                        <span class="{{ $chip }} {{ $statusKelas['rekom'] }}">{{ $rekom }} rekom</span>
+                    </div>
                 </div>
                 <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                     @foreach ($rows as $item)
+                        @php($uStatus = $statusMap[$item->idyayasan]['status'] ?? $item->status_pembayaran)
+                        @php($statusRekom = $item->rekomendasi ?: 'tidak')
+                        @php($nominalRekom = $rekomNominalMap[$item->siswa_id] ?? null)
                         <article class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                             <div class="text-base font-black leading-snug text-slate-950">{{ $item->nama }}</div>
                             <div class="mt-1 text-xs font-semibold text-slate-500">{{ $item->idyayasan }} /
                                 {{ $item->nama_kelas }}</div>
+                            <div class="mt-2 flex flex-wrap gap-1.5">
+                                <span
+                                    class="{{ $chip }} {{ $uStatus === 'Lunas' ? $statusKelas['lunas'] : $statusKelas['belum'] }}">
+                                    {{ $uStatus === 'Lunas' ? 'Lunas' : 'Belum Lunas' }}
+                                </span>
+                                <span
+                                    class="{{ $chip }} {{ $statusRekom === 'ya' ? $statusKelas['rekom'] : $statusKelas['non_rekom'] }}">
+                                    Rekom {{ $statusRekom === 'ya' ? 'Ya' : 'Tidak' }}
+                                </span>
+                                @if ($statusRekom === 'ya' && $nominalRekom)
+                                    <span class="{{ $chip }} {{ $statusKelas['nominal'] }}">Rp
+                                        {{ number_format($nominalRekom, 0, ',', '.') }}</span>
+                                @endif
+                            </div>
                         </article>
                     @endforeach
                 </div>
@@ -67,6 +119,9 @@
     </div>
 
     <script>
+        const statusKelas = @json($statusKelas);
+        const chip = @json($chip);
+
         let searchTimeout;
         const searchInput = document.getElementById('searchInput');
         const resultsContainer = document.getElementById('resultsContainer');
@@ -75,6 +130,35 @@
         let currentFilters = {
             ruangan: '{{ request('ruangan') }}'
         };
+
+        function escapeHtml(value) {
+            if (value === null || value === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = String(value);
+            return div.innerHTML;
+        }
+
+        function rupiah(value) {
+            const number = Number(value) || 0;
+            return 'Rp ' + number.toLocaleString('id-ID');
+        }
+
+        function statusBadges(student) {
+            const lunas = student.status_pembayaran === 'Lunas';
+            const rekomYa = student.rekomendasi === 'ya';
+
+            let html = '<span class="' + chip + ' ' + (lunas ? statusKelas.lunas : statusKelas.belum) + '">' +
+                (lunas ? 'Lunas' : 'Belum Lunas') + '</span>';
+            html += '<span class="' + chip + ' ' + (rekomYa ? statusKelas.rekom : statusKelas.non_rekom) + '">Rekom ' +
+                (rekomYa ? 'Ya' : 'Tidak') + '</span>';
+
+            if (rekomYa && student.nominal_rekom) {
+                html += '<span class="' + chip + ' ' + statusKelas.nominal + '">' + rupiah(student.nominal_rekom) +
+                    '</span>';
+            }
+
+            return html;
+        }
 
         function performSearch() {
             const query = searchInput.value.trim();
@@ -106,15 +190,25 @@
 
             let html = '';
             groups.forEach(group => {
+                const lunas = group.students.filter(s => s.status_pembayaran === 'Lunas').length;
+                const rekom = group.rekom_count ?? group.students.filter(s => s.rekomendasi === 'ya').length;
+
                 html += `
                     <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div class="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                            <div class="flex items-center gap-2">
-                                <h2 class="text-lg font-black text-slate-950">${group.ruangan}</h2>
-                                <span class="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-black text-indigo-700">${group.sesi}</span>
-                                <p class="text-xs font-semibold text-slate-500">${group.waktu_mulai} - ${group.waktu_selesai}</p>
+                        <div class="mb-3 flex flex-col gap-2">
+                            <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                                <div class="flex items-center gap-2">
+                                    <h2 class="text-lg font-black text-slate-950">${escapeHtml(group.ruangan)}</h2>
+                                    <span class="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-black text-indigo-700">${escapeHtml(group.sesi)}</span>
+                                    <p class="text-xs font-semibold text-slate-500">${escapeHtml(group.waktu_mulai)} - ${escapeHtml(group.waktu_selesai)}</p>
+                                </div>
+                                <span class="w-fit rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">${group.count} siswa</span>
                             </div>
-                            <span class="w-fit rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">${group.count} siswa</span>
+                            <div class="flex flex-wrap gap-1.5">
+                                <span class="${chip} ${statusKelas.lunas}">${lunas} lunas</span>
+                                <span class="${chip} ${statusKelas.belum}">${group.count - lunas} belum lunas</span>
+                                <span class="${chip} ${statusKelas.rekom}">${rekom} rekom</span>
+                            </div>
                         </div>
                         <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                 `;
@@ -122,8 +216,9 @@
                 group.students.forEach(student => {
                     html += `
                         <article class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                            <div class="text-base font-black leading-snug text-slate-950">${student.nama}</div>
-                            <div class="mt-1 text-xs font-semibold text-slate-500">${student.idyayasan} / ${student.nama_kelas || '-'}</div>
+                            <div class="text-base font-black leading-snug text-slate-950">${escapeHtml(student.nama)}</div>
+                            <div class="mt-1 text-xs font-semibold text-slate-500">${escapeHtml(student.idyayasan)} / ${escapeHtml(student.nama_kelas || '-')}</div>
+                            <div class="mt-2 flex flex-wrap gap-1.5">${statusBadges(student)}</div>
                         </article>
                     `;
                 });

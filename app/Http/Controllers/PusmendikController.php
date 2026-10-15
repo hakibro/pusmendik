@@ -212,6 +212,44 @@ class PusmendikController extends Controller
         return $map;
     }
 
+    /**
+     * Peta `siswa_id` => nominal rekomendasi dari handler TERBARU pada scope aktif
+     * (tahun ajaran + paket ujian) — pembacaan yang sama dengan daftar Rekom
+     * (`latestHandlerSubquery`), tapi hanya yang dibutuhkan kartu ruangan.
+     *
+     * Status rekom sendiri dibaca dari `siswa_tahun_ajaran.rekomendasi` seperti
+     * halaman Rekom, supaya kartu ruangan tidak pernah menyimpang dari sana.
+     *
+     * @param  Collection<int, mixed>  $students
+     * @return array<int, float>
+     */
+    private function rekomNominalMapForStudents($students): array
+    {
+        $ids = collect($students)->pluck('siswa_id')->filter()->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        [$scopeTa, $scopePaket] = $this->recommendationScope();
+
+        return DB::table('recommendation_handlers')
+            ->whereIn('exam_siswa_id', $ids)
+            ->when($scopeTa, fn ($query) => $query->where('tahun_ajaran_id', $scopeTa))
+            ->when($scopePaket, fn ($query) => $query->where('paket_ujian_id', $scopePaket))
+            ->whereIn('id', function ($subquery) use ($ids, $scopeTa, $scopePaket) {
+                $subquery->selectRaw('MAX(id)')
+                    ->from('recommendation_handlers')
+                    ->whereIn('exam_siswa_id', $ids)
+                    ->when($scopeTa, fn ($query) => $query->where('tahun_ajaran_id', $scopeTa))
+                    ->when($scopePaket, fn ($query) => $query->where('paket_ujian_id', $scopePaket))
+                    ->groupBy('exam_siswa_id');
+            })
+            ->pluck('nominal_rekom', 'exam_siswa_id')
+            ->map(fn ($nominal) => (float) $nominal)
+            ->all();
+    }
+
     public function studentDetail(int $id)
     {
         $student = $this->studentQuery()->where('siswa.id', $id)->firstOrFail();
@@ -533,7 +571,20 @@ class PusmendikController extends Controller
             })
             ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
             ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
-            ->select('siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'sr.nama_sesi', 'sr.waktu_mulai', 'sr.waktu_selesai', 'ruangan.nama_ruangan', 'srs.status_kehadiran')
+            ->select(
+                'siswa.id as siswa_id',
+                'siswa.idyayasan',
+                'siswa.nama',
+                'kelas.tingkat',
+                'kelas.nama_kelas',
+                'sr.nama_sesi',
+                'sr.waktu_mulai',
+                'sr.waktu_selesai',
+                'ruangan.nama_ruangan',
+                'srs.status_kehadiran',
+                DB::raw('sta.status_pembayaran as status_pembayaran'),
+                DB::raw("COALESCE(sta.rekomendasi, 'tidak') as rekomendasi")
+            )
             ->whereNull('siswa.deleted_at')
             ->where('sr.sumber', 'sumber')->where('sr.paket_ujian_id', $activeExamPackageId)
             ->when($activeAcademicYearId, fn ($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId))
@@ -547,9 +598,16 @@ class PusmendikController extends Controller
             ->orderBy('siswa.nama')
             ->get();
 
+        // Status administrasi ujian (Lunas/Belum) memakai definisi tunggal gerbang
+        // ujian, dan rekom + nominalnya dibaca pada scope TA + paket ujian aktif —
+        // supaya badge di kartu ruangan konsisten dengan halaman Rekom.
+        $statusMap = $this->ujianStatusForStudents($items);
+
         return view('rooms.index', [
             'title' => 'Ruangan dan Sesi Siswa',
             'items' => $items,
+            'statusMap' => $statusMap,
+            'rekomNominalMap' => $this->rekomNominalMapForStudents($items),
             'filters' => ['q' => 'Nama / ID Yayasan', 'tingkat' => 'Tingkat', 'kelas' => 'Kelas', 'ruangan' => 'Ruangan', 'sesi' => 'Sesi'],
             'filterOptions' => $this->roomFilterOptions(),
         ]);
@@ -572,7 +630,20 @@ class PusmendikController extends Controller
             })
             ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
             ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
-            ->select('siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'sr.nama_sesi', 'sr.waktu_mulai', 'sr.waktu_selesai', 'ruangan.nama_ruangan', 'srs.status_kehadiran')
+            ->select(
+                'siswa.id as siswa_id',
+                'siswa.idyayasan',
+                'siswa.nama',
+                'kelas.tingkat',
+                'kelas.nama_kelas',
+                'sr.nama_sesi',
+                'sr.waktu_mulai',
+                'sr.waktu_selesai',
+                'ruangan.nama_ruangan',
+                'srs.status_kehadiran',
+                DB::raw('sta.status_pembayaran as status_pembayaran'),
+                DB::raw("COALESCE(sta.rekomendasi, 'tidak') as rekomendasi")
+            )
             ->whereNull('siswa.deleted_at')
             ->where('sr.sumber', 'sumber')->where('sr.paket_ujian_id', $activeExamPackageId)
             ->when($activeAcademicYearId, fn ($q) => $q->where('sr.tahun_ajaran_id', $activeAcademicYearId));
@@ -600,27 +671,40 @@ class PusmendikController extends Controller
             $query->where('sr.nama_sesi', $request->sesi);
         }
 
+        $rows = $query
+            ->orderBy('ruangan.nama_ruangan')
+            ->orderBy('sr.waktu_mulai')
+            ->orderBy('siswa.nama')
+            ->limit(100)
+            ->get();
+
+        // Kartu hasil live search memakai badge/status yang sama dengan kartu
+        // server-rendered, jadi kedua peta dihitung dari baris yang tampil.
+        $statusMap = $this->ujianStatusForStudents($rows);
+        $rekomNominalMap = $this->rekomNominalMapForStudents($rows);
+
         return response()->json(
-            $query
-                ->orderBy('ruangan.nama_ruangan')
-                ->orderBy('sr.waktu_mulai')
-                ->orderBy('siswa.nama')
-                ->limit(100)
-                ->get()
+            $rows
                 ->groupBy(fn ($item) => ($item->nama_ruangan ?? '-').'|'.($item->nama_sesi ?? '-'))
-                ->map(fn ($rows, $key) => [
-                    'key' => $key,
-                    'ruangan' => explode('|', $key)[0],
-                    'sesi' => explode('|', $key)[1],
-                    'waktu_mulai' => $rows->first()->waktu_mulai ?? '-',
-                    'waktu_selesai' => $rows->first()->waktu_selesai ?? '-',
-                    'count' => $rows->count(),
-                    'students' => $rows->map(fn ($student) => [
-                        'nama' => $student->nama,
-                        'idyayasan' => $student->idyayasan,
-                        'nama_kelas' => $student->nama_kelas,
-                    ])->values(),
-                ])
+                ->map(function ($rows, $key) use ($statusMap, $rekomNominalMap) {
+                    return [
+                        'key' => $key,
+                        'ruangan' => explode('|', $key)[0],
+                        'sesi' => explode('|', $key)[1],
+                        'waktu_mulai' => $rows->first()->waktu_mulai ?? '-',
+                        'waktu_selesai' => $rows->first()->waktu_selesai ?? '-',
+                        'count' => $rows->count(),
+                        'rekom_count' => $rows->filter(fn ($row) => ($row->rekomendasi ?: 'tidak') === 'ya')->count(),
+                        'students' => $rows->map(fn ($student) => [
+                            'nama' => $student->nama,
+                            'idyayasan' => $student->idyayasan,
+                            'nama_kelas' => $student->nama_kelas,
+                            'status_pembayaran' => $statusMap[$student->idyayasan]['status'] ?? $student->status_pembayaran,
+                            'rekomendasi' => $student->rekomendasi ?: 'tidak',
+                            'nominal_rekom' => $rekomNominalMap[(int) $student->siswa_id] ?? null,
+                        ])->values(),
+                    ];
+                })
                 ->values()
         );
     }

@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -17,6 +19,8 @@ use Tests\TestCase;
  */
 class RoomStudentSearchScopeTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -32,6 +36,10 @@ class RoomStudentSearchScopeTest extends TestCase
 
         $this->createExamSchema();
         $this->seedExamData();
+
+        // Gerbang pembayaran ujian apiakademik tidak dipanggil di test ini; status
+        // administrasi jatuh ke kolom `siswa_tahun_ajaran.status_pembayaran`.
+        Http::fake(['*' => Http::response([], 500)]);
     }
 
     private function createExamSchema(): void
@@ -86,6 +94,8 @@ class RoomStudentSearchScopeTest extends TestCase
             $table->unsignedBigInteger('siswa_id');
             $table->unsignedBigInteger('tahun_ajaran_id')->nullable();
             $table->unsignedBigInteger('kelas_id')->nullable();
+            $table->string('status_pembayaran')->nullable();
+            $table->string('rekomendasi')->nullable();
         });
 
         $schema->create('sesi_ruangan_siswa', function ($table) {
@@ -118,9 +128,29 @@ class RoomStudentSearchScopeTest extends TestCase
 
         foreach ([1, 2] as $siswaId) {
             $db->table('siswa_tahun_ajaran')->insert([
-                ['siswa_id' => $siswaId, 'tahun_ajaran_id' => 1, 'kelas_id' => 1],
+                [
+                    'siswa_id' => $siswaId,
+                    'tahun_ajaran_id' => 1,
+                    'kelas_id' => 1,
+                    'status_pembayaran' => $siswaId === 1 ? 'Lunas' : 'Belum Lunas',
+                    'rekomendasi' => $siswaId === 1 ? 'ya' : 'tidak',
+                ],
             ]);
         }
+
+        // Rekom pada scope aktif (TA 1 + paket aktif 20) untuk siswa paket aktif.
+        DB::table('recommendation_handlers')->insert([
+            [
+                'exam_siswa_id' => 1,
+                'tahun_ajaran_id' => 1,
+                'paket_ujian_id' => 20,
+                'idyayasan' => 'SISWA-PAKET-AKTIF',
+                'nama' => 'SISWA-PAKET-AKTIF',
+                'nominal_rekom' => 500000,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
 
         $db->table('sesi_ruangan')->insert([
             ['id' => 1, 'ruangan_id' => 1, 'nama_sesi' => 'Sesi 1', 'waktu_mulai' => '08:00', 'waktu_selesai' => '09:00', 'sumber' => 'sumber', 'paket_ujian_id' => 20, 'tahun_ajaran_id' => 1],
@@ -139,5 +169,22 @@ class RoomStudentSearchScopeTest extends TestCase
 
         $response->assertJsonFragment(['nama' => 'SISWA-PAKET-AKTIF']);
         $response->assertJsonMissing(['nama' => 'SISWA-PAKET-LAMA']);
+    }
+
+    /**
+     * Kartu hasil live search harus membawa status administrasi (Lunas/Belum) dan
+     * status rekom + nominalnya, supaya badge-nya sama dengan kartu server-rendered.
+     */
+    public function test_kartu_membawa_status_administrasi_dan_rekom_beserta_nominal(): void
+    {
+        $response = $this->getJson('/ajax/ruangan-siswa')->assertOk();
+
+        $response->assertJsonFragment([
+            'nama' => 'SISWA-PAKET-AKTIF',
+            'status_pembayaran' => 'Lunas',
+            'rekomendasi' => 'ya',
+            'nominal_rekom' => 500000,
+        ]);
+        $response->assertJsonFragment(['rekom_count' => 1]);
     }
 }
