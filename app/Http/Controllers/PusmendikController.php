@@ -212,44 +212,6 @@ class PusmendikController extends Controller
         return $map;
     }
 
-    /**
-     * Peta `siswa_id` => nominal rekomendasi dari handler TERBARU pada scope aktif
-     * (tahun ajaran + paket ujian) — pembacaan yang sama dengan daftar Rekom
-     * (`latestHandlerSubquery`), tapi hanya yang dibutuhkan kartu ruangan.
-     *
-     * Status rekom sendiri dibaca dari `siswa_tahun_ajaran.rekomendasi` seperti
-     * halaman Rekom, supaya kartu ruangan tidak pernah menyimpang dari sana.
-     *
-     * @param  Collection<int, mixed>  $students
-     * @return array<int, float>
-     */
-    private function rekomNominalMapForStudents($students): array
-    {
-        $ids = collect($students)->pluck('siswa_id')->filter()->unique()->values();
-
-        if ($ids->isEmpty()) {
-            return [];
-        }
-
-        [$scopeTa, $scopePaket] = $this->recommendationScope();
-
-        return DB::table('recommendation_handlers')
-            ->whereIn('exam_siswa_id', $ids)
-            ->when($scopeTa, fn ($query) => $query->where('tahun_ajaran_id', $scopeTa))
-            ->when($scopePaket, fn ($query) => $query->where('paket_ujian_id', $scopePaket))
-            ->whereIn('id', function ($subquery) use ($ids, $scopeTa, $scopePaket) {
-                $subquery->selectRaw('MAX(id)')
-                    ->from('recommendation_handlers')
-                    ->whereIn('exam_siswa_id', $ids)
-                    ->when($scopeTa, fn ($query) => $query->where('tahun_ajaran_id', $scopeTa))
-                    ->when($scopePaket, fn ($query) => $query->where('paket_ujian_id', $scopePaket))
-                    ->groupBy('exam_siswa_id');
-            })
-            ->pluck('nominal_rekom', 'exam_siswa_id')
-            ->map(fn ($nominal) => (float) $nominal)
-            ->all();
-    }
-
     public function studentDetail(int $id)
     {
         $student = $this->studentQuery()->where('siswa.id', $id)->firstOrFail();
@@ -572,7 +534,6 @@ class PusmendikController extends Controller
             ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
             ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
             ->select(
-                'siswa.id as siswa_id',
                 'siswa.idyayasan',
                 'siswa.nama',
                 'kelas.tingkat',
@@ -598,16 +559,15 @@ class PusmendikController extends Controller
             ->orderBy('siswa.nama')
             ->get();
 
-        // Status administrasi ujian (Lunas/Belum) memakai definisi tunggal gerbang
-        // ujian, dan rekom + nominalnya dibaca pada scope TA + paket ujian aktif —
-        // supaya badge di kartu ruangan konsisten dengan halaman Rekom.
+        // Status administrasi ujian memakai definisi tunggal gerbang ujian, dan
+        // status rekom dibaca pada scope TA + paket ujian aktif — supaya kartu
+        // ruangan konsisten dengan halaman Rekom.
         $statusMap = $this->ujianStatusForStudents($items);
 
         return view('rooms.index', [
             'title' => 'Ruangan dan Sesi Siswa',
             'items' => $items,
             'statusMap' => $statusMap,
-            'rekomNominalMap' => $this->rekomNominalMapForStudents($items),
             'filters' => ['q' => 'Nama / ID Yayasan', 'tingkat' => 'Tingkat', 'kelas' => 'Kelas', 'ruangan' => 'Ruangan', 'sesi' => 'Sesi'],
             'filterOptions' => $this->roomFilterOptions(),
         ]);
@@ -631,7 +591,6 @@ class PusmendikController extends Controller
             ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
             ->join('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
             ->select(
-                'siswa.id as siswa_id',
                 'siswa.idyayasan',
                 'siswa.nama',
                 'kelas.tingkat',
@@ -678,15 +637,14 @@ class PusmendikController extends Controller
             ->limit(100)
             ->get();
 
-        // Kartu hasil live search memakai badge/status yang sama dengan kartu
-        // server-rendered, jadi kedua peta dihitung dari baris yang tampil.
+        // Kartu hasil live search memakai status yang sama dengan kartu
+        // server-rendered, jadi peta dihitung dari baris yang tampil.
         $statusMap = $this->ujianStatusForStudents($rows);
-        $rekomNominalMap = $this->rekomNominalMapForStudents($rows);
 
         return response()->json(
             $rows
                 ->groupBy(fn ($item) => ($item->nama_ruangan ?? '-').'|'.($item->nama_sesi ?? '-'))
-                ->map(function ($rows, $key) use ($statusMap, $rekomNominalMap) {
+                ->map(function ($rows, $key) use ($statusMap) {
                     return [
                         'key' => $key,
                         'ruangan' => explode('|', $key)[0],
@@ -701,7 +659,6 @@ class PusmendikController extends Controller
                             'nama_kelas' => $student->nama_kelas,
                             'status_pembayaran' => $statusMap[$student->idyayasan]['status'] ?? $student->status_pembayaran,
                             'rekomendasi' => $student->rekomendasi ?: 'tidak',
-                            'nominal_rekom' => $rekomNominalMap[(int) $student->siswa_id] ?? null,
                         ])->values(),
                     ];
                 })

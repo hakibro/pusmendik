@@ -3,14 +3,19 @@
 @php
     // Definisi warna status — dipakai seragam oleh kartu server-rendered maupun
     // kartu hasil live search, supaya kedua jalur tampil identik.
+    // Status administrasi UJIAN tampil sebagai warna background + border kartu
+    // (bukan chip), karena itu status paling utama di halaman ini.
     $statusKelas = [
-        'lunas' => 'bg-emerald-50 text-emerald-700',
-        'belum' => 'bg-rose-50 text-rose-700',
-        'rekom' => 'bg-teal-50 text-teal-700',
+        'lunas' => 'bg-emerald-50 border-emerald-200',
+        'belum' => 'bg-rose-50 border-rose-200',
+        'teks_lunas' => 'text-emerald-800',
+        'teks_belum' => 'text-rose-800',
+        'rekom' => 'bg-white text-teal-700 ring-1 ring-teal-200',
         'non_rekom' => 'bg-slate-100 text-slate-600',
-        'nominal' => 'bg-amber-50 text-amber-800',
     ];
+    $card = 'rounded-2xl border p-3';
     $chip = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black';
+    $labelRekom = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide';
 @endphp
 
 @section('content')
@@ -50,11 +55,16 @@
         {{-- Keterangan warna status --}}
         <div class="flex flex-wrap items-center gap-1.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm">
             <span class="mr-1 text-[10px] font-black uppercase tracking-wide text-slate-400">Keterangan</span>
-            <span class="{{ $chip }} {{ $statusKelas['lunas'] }}">Administrasi Lunas</span>
-            <span class="{{ $chip }} {{ $statusKelas['belum'] }}">Administrasi Belum Lunas</span>
-            <span class="{{ $chip }} {{ $statusKelas['rekom'] }}">Rekom Ya</span>
-            <span class="{{ $chip }} {{ $statusKelas['non_rekom'] }}">Rekom Tidak</span>
-            <span class="{{ $chip }} {{ $statusKelas['nominal'] }}">Nominal Rekom</span>
+            <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-black {{ $statusKelas['lunas'] }} {{ $statusKelas['teks_lunas'] }}">Administrasi
+                Lunas</span>
+            <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-black {{ $statusKelas['belum'] }} {{ $statusKelas['teks_belum'] }}">Administrasi
+                Belum Lunas</span>
+            <span class="{{ $labelRekom }} {{ $statusKelas['rekom'] }}">
+                <svg class="size-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 17.6 6.1 20.7l1.2-6.6L2.5 9.5l6.6-.9L12 2.5z" />
+                </svg>
+                Rekom
+            </span>
         </div>
     </div>
 
@@ -79,8 +89,9 @@
                             siswa</span>
                     </div>
                     <div class="flex flex-wrap gap-1.5">
-                        <span class="{{ $chip }} {{ $statusKelas['lunas'] }}">{{ $lunas }} lunas</span>
-                        <span class="{{ $chip }} {{ $statusKelas['belum'] }}">{{ $rows->count() - $lunas }} belum
+                        <span class="{{ $chip }} {{ $statusKelas['lunas'] }} {{ $statusKelas['teks_lunas'] }}">{{ $lunas }}
+                            lunas</span>
+                        <span class="{{ $chip }} {{ $statusKelas['belum'] }} {{ $statusKelas['teks_belum'] }}">{{ $rows->count() - $lunas }} belum
                             lunas</span>
                         <span class="{{ $chip }} {{ $statusKelas['rekom'] }}">{{ $rekom }} rekom</span>
                     </div>
@@ -88,25 +99,31 @@
                 <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                     @foreach ($rows as $item)
                         @php($uStatus = $statusMap[$item->idyayasan]['status'] ?? $item->status_pembayaran)
+                        @php($lunasItem = $uStatus === 'Lunas')
                         @php($statusRekom = $item->rekomendasi ?: 'tidak')
-                        @php($nominalRekom = $rekomNominalMap[$item->siswa_id] ?? null)
-                        <article class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                            <div class="text-base font-black leading-snug text-slate-950">{{ $item->nama }}</div>
-                            <div class="mt-1 text-xs font-semibold text-slate-500">{{ $item->idyayasan }} /
-                                {{ $item->nama_kelas }}</div>
-                            <div class="mt-2 flex flex-wrap gap-1.5">
-                                <span
-                                    class="{{ $chip }} {{ $uStatus === 'Lunas' ? $statusKelas['lunas'] : $statusKelas['belum'] }}">
-                                    {{ $uStatus === 'Lunas' ? 'Lunas' : 'Belum Lunas' }}
-                                </span>
-                                <span
-                                    class="{{ $chip }} {{ $statusRekom === 'ya' ? $statusKelas['rekom'] : $statusKelas['non_rekom'] }}">
-                                    Rekom {{ $statusRekom === 'ya' ? 'Ya' : 'Tidak' }}
-                                </span>
-                                @if ($statusRekom === 'ya' && $nominalRekom)
-                                    <span class="{{ $chip }} {{ $statusKelas['nominal'] }}">Rp
-                                        {{ number_format($nominalRekom, 0, ',', '.') }}</span>
+                        <article @class([
+                            $card,
+                            $statusKelas['lunas'] => $lunasItem,
+                            $statusKelas['belum'] => !$lunasItem,
+                        ])>
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="text-base font-black leading-snug text-slate-950">{{ $item->nama }}</div>
+                                    <div class="mt-1 text-xs font-semibold text-slate-500">{{ $item->idyayasan }} /
+                                        {{ $item->nama_kelas }}</div>
+                                </div>
+                                @if ($statusRekom === 'ya')
+                                    <span class="{{ $labelRekom }} {{ $statusKelas['rekom'] }}">
+                                        <svg class="size-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                            <path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 17.6 6.1 20.7l1.2-6.6L2.5 9.5l6.6-.9L12 2.5z" />
+                                        </svg>
+                                        Rekom
+                                    </span>
                                 @endif
+                            </div>
+                            <div
+                                class="mt-2 text-xs font-black {{ $lunasItem ? $statusKelas['teks_lunas'] : $statusKelas['teks_belum'] }}">
+                                {{ $lunasItem ? 'Lunas' : 'Belum Lunas' }}
                             </div>
                         </article>
                     @endforeach
@@ -120,7 +137,9 @@
 
     <script>
         const statusKelas = @json($statusKelas);
+        const cardKelas = @json($card);
         const chip = @json($chip);
+        const labelRekom = @json($labelRekom);
 
         let searchTimeout;
         const searchInput = document.getElementById('searchInput');
@@ -138,26 +157,30 @@
             return div.innerHTML;
         }
 
-        function rupiah(value) {
-            const number = Number(value) || 0;
-            return 'Rp ' + number.toLocaleString('id-ID');
-        }
+        const bintang = '<svg class="size-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+            '<path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 17.6 6.1 20.7l1.2-6.6L2.5 9.5l6.6-.9L12 2.5z"/></svg>';
 
-        function statusBadges(student) {
+        function studentCard(student) {
             const lunas = student.status_pembayaran === 'Lunas';
             const rekomYa = student.rekomendasi === 'ya';
+            const cardClass = cardKelas + ' ' + (lunas ? statusKelas.lunas : statusKelas.belum);
+            const teksClass = lunas ? statusKelas.teks_lunas : statusKelas.teks_belum;
+            const label = rekomYa ?
+                '<span class="' + labelRekom + ' ' + statusKelas.rekom + '">' + bintang + 'Rekom</span>' :
+                '';
 
-            let html = '<span class="' + chip + ' ' + (lunas ? statusKelas.lunas : statusKelas.belum) + '">' +
-                (lunas ? 'Lunas' : 'Belum Lunas') + '</span>';
-            html += '<span class="' + chip + ' ' + (rekomYa ? statusKelas.rekom : statusKelas.non_rekom) + '">Rekom ' +
-                (rekomYa ? 'Ya' : 'Tidak') + '</span>';
-
-            if (rekomYa && student.nominal_rekom) {
-                html += '<span class="' + chip + ' ' + statusKelas.nominal + '">' + rupiah(student.nominal_rekom) +
-                    '</span>';
-            }
-
-            return html;
+            return '<article class="' + cardClass + '">' +
+                '<div class="flex items-start justify-between gap-2">' +
+                '<div class="min-w-0">' +
+                '<div class="text-base font-black leading-snug text-slate-950">' + escapeHtml(student.nama) +
+                '</div>' +
+                '<div class="mt-1 text-xs font-semibold text-slate-500">' + escapeHtml(student.idyayasan) + ' / ' +
+                escapeHtml(student.nama_kelas || '-') + '</div>' +
+                '</div>' + label +
+                '</div>' +
+                '<div class="mt-2 text-xs font-black ' + teksClass + '">' + (lunas ? 'Lunas' : 'Belum Lunas') +
+                '</div>' +
+                '</article>';
         }
 
         function performSearch() {
@@ -205,25 +228,13 @@
                                 <span class="w-fit rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">${group.count} siswa</span>
                             </div>
                             <div class="flex flex-wrap gap-1.5">
-                                <span class="${chip} ${statusKelas.lunas}">${lunas} lunas</span>
-                                <span class="${chip} ${statusKelas.belum}">${group.count - lunas} belum lunas</span>
+                                <span class="${chip} ${statusKelas.lunas} ${statusKelas.teks_lunas}">${lunas} lunas</span>
+                                <span class="${chip} ${statusKelas.belum} ${statusKelas.teks_belum}">${group.count - lunas} belum lunas</span>
                                 <span class="${chip} ${statusKelas.rekom}">${rekom} rekom</span>
                             </div>
                         </div>
                         <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                `;
-
-                group.students.forEach(student => {
-                    html += `
-                        <article class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                            <div class="text-base font-black leading-snug text-slate-950">${escapeHtml(student.nama)}</div>
-                            <div class="mt-1 text-xs font-semibold text-slate-500">${escapeHtml(student.idyayasan)} / ${escapeHtml(student.nama_kelas || '-')}</div>
-                            <div class="mt-2 flex flex-wrap gap-1.5">${statusBadges(student)}</div>
-                        </article>
-                    `;
-                });
-
-                html += `
+                            ${group.students.map(studentCard).join('')}
                         </div>
                     </section>
                 `;

@@ -139,6 +139,8 @@ class RoomStudentSearchScopeTest extends TestCase
         }
 
         // Rekom pada scope aktif (TA 1 + paket aktif 20) untuk siswa paket aktif.
+        // Handler ini punya nominal, tapi nominalnya TIDAK boleh bocor ke payload
+        // kartu ruangan (sudah disembunyikan dari halaman).
         DB::table('recommendation_handlers')->insert([
             [
                 'exam_siswa_id' => 1,
@@ -173,9 +175,12 @@ class RoomStudentSearchScopeTest extends TestCase
 
     /**
      * Kartu hasil live search harus membawa status administrasi (Lunas/Belum) dan
-     * status rekom + nominalnya, supaya badge-nya sama dengan kartu server-rendered.
+     * status rekom, supaya tampilannya sama dengan kartu server-rendered.
+     *
+     * Nominal rekom SENGAJA tidak dikirim lagi (disembunyikan dari halaman) —
+     * dikunci di sini supaya tidak diam-diam muncul kembali.
      */
-    public function test_kartu_membawa_status_administrasi_dan_rekom_beserta_nominal(): void
+    public function test_kartu_membawa_status_administrasi_dan_rekom_tanpa_nominal(): void
     {
         $response = $this->getJson('/ajax/ruangan-siswa')->assertOk();
 
@@ -183,8 +188,8 @@ class RoomStudentSearchScopeTest extends TestCase
             'nama' => 'SISWA-PAKET-AKTIF',
             'status_pembayaran' => 'Lunas',
             'rekomendasi' => 'ya',
-            'nominal_rekom' => 500000,
         ]);
         $response->assertJsonFragment(['rekom_count' => 1]);
+        $response->assertJsonMissingPath('0.students.0.nominal_rekom');
     }
 }
