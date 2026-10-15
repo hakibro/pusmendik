@@ -35,7 +35,12 @@
                         <h2 class="text-xl font-black">{{ $student->nama }}</h2>
                         <p class="mt-1 text-sm text-slate-500">{{ $student->idyayasan }} / {{ $student->nama_kelas }}</p>
                     </div>
-                    <span @class(['w-fit rounded-full px-3 py-1 text-xs font-black', 'bg-emerald-50 text-emerald-700' => ($statusAdmin ?? $student->status_pembayaran) === 'Lunas', 'bg-rose-50 text-rose-700' => ($statusAdmin ?? $student->status_pembayaran) !== 'Lunas'])>{{ $statusAdmin ?? $student->status_pembayaran }}</span>
+                    <div class="flex flex-wrap items-center gap-2">
+                        @if (($student->rekomendasi ?? 'tidak') === 'ya')
+                            <span class="w-fit rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">Rekom Ya</span>
+                        @endif
+                        <span @class(['w-fit rounded-full px-3 py-1 text-xs font-black', 'bg-emerald-50 text-emerald-700' => ($statusAdmin ?? $student->status_pembayaran) === 'Lunas', 'bg-rose-50 text-rose-700' => ($statusAdmin ?? $student->status_pembayaran) !== 'Lunas'])>{{ $statusAdmin ?? $student->status_pembayaran }}</span>
+                    </div>
                 </div>
                 @if(isset($paymentView['error']))
                     <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800">{{ $paymentView['error'] }}</div>

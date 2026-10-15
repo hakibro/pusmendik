@@ -415,6 +415,7 @@ class PusmendikController extends Controller
                     'nama' => $student->nama,
                     'kelas' => $student->nama_kelas,
                     'status_pembayaran' => $statusMap[$student->idyayasan]['status'] ?? $student->status_pembayaran,
+                    'rekomendasi' => $student->rekomendasi ?: 'tidak',
                     'url' => route('payments.status', ['q' => $student->idyayasan]),
                 ])
         );

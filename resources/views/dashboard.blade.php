@@ -220,7 +220,10 @@
                 results.innerHTML = students.length ?
                     students.map((student) => `
                 <a href="${student.url}" class="block border-b border-slate-100 px-4 py-3 transition last:border-0 hover:bg-teal-50">
-                    <span class="block text-sm font-black">${student.nama} - ${student.kelas ?? '-'}</span>
+                    <span class="flex items-center gap-2">
+                        <span class="block text-sm font-black">${student.nama} - ${student.kelas ?? '-'}</span>
+                        ${student.rekomendasi === 'ya' ? '<span class="shrink-0 rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-black text-teal-700">Rekom Ya</span>' : ''}
+                    </span>
                     <span class="mt-1 block text-xs font-semibold text-slate-500">${student.idyayasan} / ${student.status_pembayaran}</span>
                 </a>
             `).join('') :
