@@ -18,6 +18,7 @@ Route::get('/ruangan-sesi', [PusmendikController::class, 'rooms'])->name('rooms.
 Route::get('/pengawas', [PusmendikController::class, 'supervisors'])->name('supervisors.index');
 Route::get('/live-ujian', [PusmendikController::class, 'liveExam'])->name('live.index');
 Route::get('/kehadiran', [PusmendikController::class, 'attendance'])->name('attendance.index');
+Route::get('/kehadiran/download', [PusmendikController::class, 'exportAttendance'])->name('attendance.download');
 Route::get('/hasil-ujian', [PusmendikController::class, 'examResults'])->name('results.index');
 Route::get('/hasil-ujian/download', [PusmendikController::class, 'downloadExamResults'])->name('results.download');
 Route::get('/panduan', [PusmendikController::class, 'guides'])->name('guides.index');

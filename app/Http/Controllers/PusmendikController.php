@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Color;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PusmendikController extends Controller
 {
@@ -815,12 +821,19 @@ class PusmendikController extends Controller
         return view('users.index', compact('users'));
     }
 
-    public function attendance(Request $request)
+    /**
+     * Query dasar kehadiran ujian: seluruh join + scope tahun ajaran & paket
+     * ujian aktif, TANPA filter request. Halaman (`attendance()`) menambahkan
+     * filter, sedangkan export harian (`exportAttendance()`) sengaja hanya
+     * memakai `tanggal` — jadi keduanya tidak bisa menyimpang soal sumber data,
+     * hanya berbeda pada filter yang diterapkan.
+     */
+    private function attendanceBaseQuery()
     {
         $activeAcademicYearId = $this->activeAcademicYearId();
         $activeExamPackageId = $this->activeExamPackageId($activeAcademicYearId);
 
-        $items = $this->exam()->table('enrollment_ujian as e')
+        return $this->exam()->table('enrollment_ujian as e')
             ->join('siswa', 'siswa.id', '=', 'e.siswa_id')
             ->leftJoin('siswa_tahun_ajaran as sta', function ($join) use ($activeAcademicYearId) {
                 $join->on('sta.siswa_id', '=', 'siswa.id');
@@ -830,13 +843,21 @@ class PusmendikController extends Controller
             })
             ->leftJoin('kelas', 'kelas.id', '=', 'sta.kelas_id')
             ->leftJoin('jadwal_ujian as ju', 'ju.id', '=', 'e.jadwal_ujian_id')
+            ->leftJoin('mapel', 'mapel.id', '=', 'ju.mapel_id')
             ->leftJoin('sesi_ruangan as sr', 'sr.id', '=', 'e.sesi_ruangan_id')
             ->leftJoin('ruangan', 'ruangan.id', '=', 'sr.ruangan_id')
             ->leftJoin('sesi_ruangan_siswa as srs', function ($join) {
                 $join->on('srs.siswa_id', '=', 'siswa.id')->on('srs.sesi_ruangan_id', '=', 'sr.id');
             })
-            ->select('siswa.id as siswa_id', 'siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'ju.tanggal', 'ju.judul', 'sr.nama_sesi', 'ruangan.nama_ruangan', 'srs.status_kehadiran', 'e.status_enrollment', 'e.waktu_mulai_ujian', 'e.waktu_selesai_ujian')
+            ->select('siswa.id as siswa_id', 'siswa.idyayasan', 'siswa.nama', 'kelas.tingkat', 'kelas.nama_kelas', 'kelas.jurusan', 'ju.tanggal', 'ju.judul', 'mapel.nama_mapel', 'sr.nama_sesi', 'ruangan.nama_ruangan', 'srs.status_kehadiran', 'e.status_enrollment', 'e.waktu_mulai_ujian', 'e.waktu_selesai_ujian', 'sta.status_pembayaran', 'sta.rekomendasi')
             ->whereNull('siswa.deleted_at')
+            ->when($activeAcademicYearId, fn ($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId))
+            ->when($activeExamPackageId, fn ($q) => $q->where('ju.paket_ujian_id', $activeExamPackageId));
+    }
+
+    public function attendance(Request $request)
+    {
+        $items = $this->attendanceBaseQuery()
             ->when($request->filled('q'), fn ($q) => $q->where(fn ($i) => $i->where('siswa.nama', 'like', '%'.$request->q.'%')->orWhere('siswa.idyayasan', 'like', '%'.$request->q.'%')))
             ->when($request->filled('tingkat'), fn ($q) => $q->where('kelas.tingkat', $request->tingkat))
             ->when($request->filled('kelas'), fn ($q) => $q->where('kelas.nama_kelas', $request->kelas))
@@ -845,19 +866,166 @@ class PusmendikController extends Controller
             ->when($request->filled('status_kehadiran'), fn ($q) => $q->where('srs.status_kehadiran', $request->status_kehadiran))
             ->when($request->filled('tanggal_awal'), fn ($q) => $q->whereDate('ju.tanggal', '>=', $request->tanggal_awal))
             ->when($request->filled('tanggal_akhir'), fn ($q) => $q->whereDate('ju.tanggal', '<=', $request->tanggal_akhir))
-            ->when($activeAcademicYearId, fn ($q) => $q->where('ju.tahun_ajaran_id', $activeAcademicYearId))
-            ->when($activeExamPackageId, fn ($q) => $q->where('ju.paket_ujian_id', $activeExamPackageId))
             ->orderByDesc('ju.tanggal')
             ->orderBy('siswa.nama')
             ->paginate(30)
             ->withQueryString();
 
+        $filterOptions = $this->attendanceFilterOptions();
+
         return view('attendance.index', [
             'title' => 'Kehadiran dan Status Pengerjaan',
             'items' => $items,
             'filters' => ['q' => 'Nama / ID Yayasan', 'tingkat' => 'Tingkat', 'kelas' => 'Kelas', 'sesi' => 'Sesi', 'ruangan' => 'Ruangan', 'status_kehadiran' => 'Status Kehadiran', 'tanggal_awal' => 'Tanggal Awal', 'tanggal_akhir' => 'Tanggal Akhir'],
-            'filterOptions' => $this->attendanceFilterOptions(),
+            'filterOptions' => $filterOptions,
+            'tanggalExportDefault' => $this->defaultExportDate($filterOptions['tanggal_awal']),
         ]);
+    }
+
+    /**
+     * Tanggal awal yang dipilih di modal export: hari ini (Asia/Jakarta) bila
+     * memang ada jadwal ujian, jika tidak tanggal ujian terbaru yang tersedia.
+     *
+     * @param  Collection<int, mixed>  $tanggalTersedia  hasil `attendanceFilterOptions()['tanggal_awal']`
+     */
+    private function defaultExportDate(Collection $tanggalTersedia): ?string
+    {
+        $daftar = $tanggalTersedia->map(fn ($t) => (string) $t)->values()->all();
+
+        if ($daftar === []) {
+            return null;
+        }
+
+        $hariIni = now('Asia/Jakarta')->toDateString();
+
+        return in_array($hariIni, $daftar, true) ? $hariIni : $daftar[0];
+    }
+
+    /**
+     * Export kehadiran satu hari ke Excel (.xlsx).
+     *
+     * Hanya `tanggal` yang dipakai sebagai filter — filter lain di halaman
+     * (q, tingkat, kelas, sesi, ruangan, status_kehadiran) SENGAJA diabaikan
+     * supaya berkas selalu berisi seluruh siswa yang ujian pada hari itu.
+     *
+     * Status administrasi ujian tidak dibaca mentah dari
+     * `siswa_tahun_ajaran.status_pembayaran` (bisa basi), melainkan dari
+     * definisi tunggal gerbang ujian lewat `ujianStatusForStudents()` —
+     * sama dengan halaman Rekom, detail siswa, dan cek pembayaran.
+     */
+    public function exportAttendance(Request $request)
+    {
+        $data = $request->validate([
+            'tanggal' => ['required', 'date'],
+        ]);
+
+        $tanggal = Carbon::parse($data['tanggal'])->toDateString();
+
+        $items = $this->attendanceBaseQuery()
+            ->whereDate('ju.tanggal', $tanggal)
+            ->orderBy('siswa.nama')
+            ->orderBy('ju.judul')
+            ->get();
+
+        $statusMap = $this->ujianStatusForStudents($items);
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Kehadiran');
+
+        $judul = 'Kehadiran Ujian — '.Carbon::parse($tanggal)->format('d/m/Y');
+        $sheet->setCellValue('A1', $judul);
+        $sheet->mergeCells('A1:P1');
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+
+        $sheet->setCellValue('A2', 'Dicetak: '.now('Asia/Jakarta')->format('d/m/Y H:i').' WIB · '.$items->count().' baris');
+        $sheet->mergeCells('A2:P2');
+        $sheet->getStyle('A2')->getFont()->setSize(9)->setColor(new Color('FF64748B'));
+
+        $headers = [
+            'No', 'Nama', 'ID Yayasan', 'Tingkat', 'Kelas', 'Jurusan', 'Tanggal', 'Mapel',
+            'Ujian', 'Sesi', 'Ruangan', 'Status Kehadiran', 'Administrasi Ujian', 'Rekom',
+            'Waktu Mulai', 'Waktu Selesai',
+        ];
+
+        $headerRow = 4;
+        foreach ($headers as $index => $header) {
+            $sheet->setCellValue([$index + 1, $headerRow], $header);
+        }
+
+        $sheet->getStyle([1, $headerRow, count($headers), $headerRow])->getFont()->setBold(true);
+        $sheet->getStyle([1, $headerRow, count($headers), $headerRow])->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setRGB('E2E8F0');
+        $sheet->getStyle([1, $headerRow, count($headers), $headerRow])->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->freezePane([1, $headerRow + 1]);
+
+        $statusKehadiranLabel = [
+            'hadir' => 'Hadir',
+            'tidak_hadir' => 'Tidak Hadir',
+            'sakit' => 'Sakit',
+            'izin' => 'Izin',
+        ];
+
+        $row = $headerRow + 1;
+        foreach ($items as $i => $item) {
+            $statusAdmin = $statusMap[$item->idyayasan]['status'] ?? $item->status_pembayaran;
+            $rekom = $item->rekomendasi ?: 'tidak';
+
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $this->exportCell($item->nama));
+            $sheet->setCellValue([3, $row], $this->exportCell($item->idyayasan));
+            $sheet->setCellValue([4, $row], $this->exportCell($item->tingkat));
+            $sheet->setCellValue([5, $row], $this->exportCell($item->nama_kelas));
+            $sheet->setCellValue([6, $row], $this->exportCell($item->jurusan));
+            $sheet->setCellValue([7, $row], $this->exportCell($item->tanggal));
+            $sheet->setCellValue([8, $row], $this->exportCell($item->nama_mapel));
+            $sheet->setCellValue([9, $row], $this->exportCell($item->judul));
+            $sheet->setCellValue([10, $row], $this->exportCell($item->nama_sesi));
+            $sheet->setCellValue([11, $row], $this->exportCell($item->nama_ruangan));
+            $sheet->setCellValue([12, $row], $statusKehadiranLabel[$item->status_kehadiran] ?? $this->exportCell($item->status_kehadiran));
+            $sheet->setCellValue([13, $row], $this->exportCell($statusAdmin));
+            $sheet->setCellValue([14, $row], $this->exportCell($rekom));
+            $sheet->setCellValue([15, $row], $this->exportCell($item->waktu_mulai_ujian));
+            $sheet->setCellValue([16, $row], $this->exportCell($item->waktu_selesai_ujian));
+
+            $row++;
+        }
+
+        foreach (range(1, count($headers)) as $column) {
+            $sheet->getColumnDimensionByColumn($column)->setAutoSize(true);
+        }
+
+        return $this->downloadXlsx(
+            $spreadsheet,
+            'kehadiran-'.$tanggal.'-'.now('Asia/Jakarta')->format('His').'.xlsx'
+        );
+    }
+
+    /**
+     * Nilai sel export: `null`/string kosong menjadi "-" agar kolom tidak
+     * terlihat bolong di Excel.
+     */
+    private function exportCell(mixed $value): string
+    {
+        if ($value === null) {
+            return '-';
+        }
+
+        $string = trim((string) $value);
+
+        return $string === '' ? '-' : $string;
+    }
+
+    private function downloadXlsx(Spreadsheet $spreadsheet, string $filename): StreamedResponse
+    {
+        return response()->streamDownload(
+            fn () => (new Xlsx($spreadsheet))->save('php://output'),
+            $filename,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        );
     }
 
     public function guides(Request $request)
